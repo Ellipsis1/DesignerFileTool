@@ -75,24 +75,34 @@ Step 2 is repeated for each round: the first send to the doctor, every revision,
 
 For a revision, save the new files in a subfolder of the working folder named `Revision 1` (`Rev 2`, `Redesign 3` and the like work too), or put the mark in the file name (`upper Rev 1.dcm`). Files in the working folder itself, or in an `Initial Design` subfolder, are the initial design. The **Design** column shows what was detected and can be changed per file.
 
-Once a case has a revision, `3D Viewer` and `Design Screenshots` get a subfolder per round so the doctor can compare them; file names are the same standard names in each. The STL folder and the patient folder itself stay flat.
+A case with no revision is laid out flat, as shown under Output. Once it has one:
+
+- **3D Viewer** always holds the newest version of each file on top. A revised file goes there with `_REV_1`, `_REV_2`, ... added to its name. The version it replaces is moved out of the way into its own round's subfolder (`Initial Design`, `Revision 1`, ...), keeping its name. Files a revision doesn't replace stay on top as they are.
+- **Design Screenshots** gets a subfolder per round, since screenshots have no fixed names and differ with what each doctor asks for. The first send's screenshots are moved into `Initial Design`, and each revision's go into its own subfolder.
+- The STL folder and the patient folder itself stay flat.
+
+For example, Revision 1 replaces only the upper DCM, then Revision 2 replaces it again:
 
 ```
     3D Viewer\
+      1234-QWER_MD_T_EST.dcm                not replaced: still the initial one
+      1234-QWER_MX_T_EST_REV_2.dcm          newest upper
       Initial Design\
         1234-QWER_MX_T_EST.dcm
       Revision 1\
-        1234-QWER_MX_T_EST.dcm
+        1234-QWER_MX_T_EST_REV_1.dcm
     Design Screenshots\
       Initial Design\
+        ...first send's screenshots
       Revision 1\
+      Revision 2\
 ```
 
-A case with no revision is laid out flat, as shown under Output. If the folder from the first send is still on the Desktop when a revision is added, its flat files stay where they are beside the new subfolders.
+Keep each round's files in the working folder (the initial ones on top, each revision's in its subfolder) and drop the CaseNotes as usual: the files already in the patient folder are recognised, and only what moves or is new is touched.
 
 ### Safeguards
 
-- Files are copied into the finished folder, never moved; the working folder stays complete.
+- Files are copied into the finished folder, never moved; the working folder stays complete. The only moves are inside the finished folder, when a revision sends earlier rounds' 3D Viewer files and screenshots into their round's subfolder.
 - Existing case files are never overwritten. A name that is already taken gets `_02`, `_03`, ... appended.
 - A file that is already in the finished folder, unchanged, is not copied again, so step 2 can be re-run for each round.
 - CaseNotes loaded from a file are not rebuilt, so hand edits survive. If the form differs from the file, the changes are listed and you are asked before anything is written.

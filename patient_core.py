@@ -703,6 +703,102 @@ def zips_not_for_patient(items, d):
             if role and Path(src).suffix.lower() == ".zip" and not _names_patient(Path(src).stem, p)]
 
 
+def rev_name(base, stage):
+    """A 3D Viewer file name for a design round: '..._MX_T_EST', '..._MX_T_EST_REV_1', ..."""
+    return f"{base}_REV_{stage}" if stage else base
+
+
+def _plan(items, d, main_folder, stages):
+    """(copies, moves) for plan_file_copies and plan_folder_moves: see those."""
+    p = patient_from(d['name_id'], d['center'])
+    root = Path(main_folder) if main_folder else Path()
+    stages = list(stages) if stages else [0] * len(items)
+    staged = any(stages)
+    fields = dict(uid=p.uid, f=p.first1, n=p.name3, c=p.center)
+    latest = {}                       # role -> its newest round in this batch
+    for (_, role), stage in zip(items, stages):
+        if role:
+            latest[role] = max(latest.get(role, 0), stage)
+    # The moves are planned first; the copies then see the folder as it will be after them.
+    taken, vacated, arrived, moves = set(), set(), {}, []
+
+    def state(src, path):
+        """'free', 'taken', or 'same' when src itself is already at path."""
+        if path in taken:
+            return "taken"
+        real = arrived.get(path, path)
+        if not main_folder or path in vacated or not real.exists():
+            return "free"
+        try:
+            return "same" if filecmp.cmp(src, real) else "taken"
+        except OSError:
+            return "taken"
+
+    def free_name(src, folder, stem, ext):
+        name, n = f"{stem}{ext}", 2
+        while (s := state(src, folder / name)) == "taken":
+            name, n = f"{stem}_{n:02d}{ext}", n + 1
+        return folder / name, s
+
+    def move(f, folder):
+        dest, s = free_name(f, folder, f.stem, f.suffix)
+        moves.append((f, dest))
+        vacated.add(f)
+        if s == "free":
+            arrived[dest] = f
+
+    def loose_files(folder):
+        if not (main_folder and folder.is_dir()):
+            return []
+        return [f for f in sorted(folder.iterdir()) if f.is_file()
+                and f.name.lower() not in _IGNORED_FILES and not f.name.startswith((".", "~"))]
+
+    # Screenshots have no naming convention, so with a revision each round gets its own
+    # subfolder, and the first send's flat ones move into Initial Design.
+    shots = root / SCREENSHOT_DIR
+    if staged:
+        for f in loose_files(shots):
+            move(f, shots / stage_name(0))
+    # The 3D Viewer keeps each file's newest version on top. A version a later round
+    # replaces moves into its own round's subfolder, under the name it has.
+    viewer, superseded = root / VIEWER_DIR, []
+    for role, last in latest.items():
+        template = ROLES[role][1]
+        if last and template and VIEWER_DIR in ROLES[role][2]:
+            base = re.escape(safe_name(template.format(**fields)))
+            superseded.append((re.compile(rf"{base}(?:_REV_(\d+))?(?:_\d\d)?\.[^.]+", re.I), last))
+    for f in loose_files(viewer) if superseded else ():
+        for pattern, last in superseded:
+            m = pattern.fullmatch(f.name)
+            if m and int(m.group(1) or 0) < last:
+                move(f, viewer / stage_name(int(m.group(1) or 0)))
+                break
+
+    copies = []
+    for (src, role), stage in zip(items, stages):
+        if not role:
+            copies.append(None)
+            continue
+        src = Path(src)
+        template = ROLES[role][1]
+        base = src.stem if template is None else safe_name(template.format(**fields))
+        dests = []
+        for sub in _dest_dirs(role, p.uid):
+            folder, stem = root / sub, base
+            if sub == VIEWER_DIR and template:
+                stem = rev_name(base, stage)
+                if stage < latest[role]:
+                    folder = folder / stage_name(stage)
+            elif sub in STAGED_DIRS and staged:
+                folder = folder / stage_name(stage)
+            dest, s = free_name(src, folder, stem, src.suffix.lower())
+            taken.add(dest)
+            if s == "free":
+                dests.append(dest)
+        copies.append(dests)
+    return copies, moves
+
+
 def plan_file_copies(items, d, main_folder=None, stages=None):
     """Work out where each case file will be copied and what it will be called.
 
@@ -713,51 +809,25 @@ def plan_file_copies(items, d, main_folder=None, stages=None):
     files already on disk or earlier in this batch) get _02, _03, ... appended.
     A destination that already holds that very file is left out, so running
     Create again for the next round copies only what is new; the list is empty
-    when the file is everywhere it belongs.
+    when the file is everywhere it belongs. The folder is seen as it will be after
+    plan_folder_moves, which are carried out first.
     Roles without a name template (screenshots, other) keep the original name.
-    Once any file belongs to a revision, the STAGED_DIRS get a subfolder per
-    round ('Initial Design', 'Revision 1', ...); the other folders stay flat.
+    Design rounds (see file_stage): the 3D Viewer holds each file's newest round on
+    top, named with rev_name ('..._REV_1'); an older round of a file goes into that
+    round's subfolder ('Initial Design', 'Revision 1', ...). Once any file belongs to
+    a revision, Design Screenshots has a subfolder per round. Other folders stay flat.
     """
-    p = patient_from(d['name_id'], d['center'])
-    root = Path(main_folder) if main_folder else Path()
-    stages = list(stages) if stages else [0] * len(items)
-    staged = any(stages)
-    taken = set()
-    results = []
+    return _plan(items, d, main_folder, stages)[0]
 
-    def state(src, path):
-        """'free', 'taken', or 'same' when src itself is already at path."""
-        if path in taken:
-            return "taken"
-        if not (main_folder and path.exists()):
-            return "free"
-        try:
-            return "same" if filecmp.cmp(src, path) else "taken"
-        except OSError:
-            return "taken"
 
-    for (src, role), stage in zip(items, stages):
-        if not role:
-            results.append(None)
-            continue
-        src = Path(src)
-        ext = src.suffix.lower()
-        template = ROLES[role][1]
-        fields = dict(uid=p.uid, f=p.first1, n=p.name3, c=p.center)
+def plan_folder_moves(items, d, main_folder, stages=None):
+    """Files already in the patient folder that move into a round's subfolder: (src, dest) pairs.
 
-        folders = [root / sub / stage_name(stage) if staged and sub in STAGED_DIRS else root / sub
-                   for sub in _dest_dirs(role, p.uid)]
-
-        base = src.stem if template is None else safe_name(template.format(**fields))
-        name, n = f"{base}{ext}", 2
-        while True:
-            states = [state(src, f / name) for f in folders]
-            if "taken" not in states:
-                break
-            name, n = f"{base}_{n:02d}{ext}", n + 1
-        taken.update(f / name for f in folders)
-        results.append([f / name for f, s in zip(folders, states) if s == "free"])
-    return results
+    With a revision, the first send's flat screenshots go into Design Screenshots\\Initial
+    Design, and a 3D Viewer file that a newer round of the same role replaces goes into
+    its own round's subfolder, keeping its name. Nothing is written; move_files does it.
+    """
+    return _plan(items, d, main_folder, stages)[1]
 
 
 def plan_rx_copy(pdf, main_folder, d):
@@ -963,6 +1033,22 @@ def write_final_casenotes(src, main_folder, notes_name, d):
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(encode(casenotes_header(text)))
     return dest
+
+
+def move_files(moves):
+    """Carry out plan_folder_moves. A file whose identical copy is already at its
+    destination (left there by an earlier version) is removed instead, so it isn't kept twice."""
+    done = []
+    for src, dest in moves:
+        if dest.exists():
+            if filecmp.cmp(src, dest, shallow=False):
+                src.unlink()
+                done.append(dest)
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(src, dest)
+        done.append(dest)
+    return done
 
 
 def copy_files(pairs):

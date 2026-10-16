@@ -20,8 +20,10 @@ Finishing a case:
    only the case information (no file-naming examples).
 6. For a revision, save the new files in a "Revision 1" subfolder of the
    working folder (or mark their names "... Rev 1") and repeat 4 and 5.
-   3D Viewer and Design Screenshots then get an "Initial Design" and a
-   "Revision 1" subfolder. Files already in the patient folder are skipped.
+   3D Viewer keeps the newest files on top (revised ones named "..._REV_1"),
+   and the versions they replace move into "Initial Design", "Revision 1", ...
+   Design Screenshots gets a subfolder per round, the first send's moving
+   into "Initial Design". Files already in the patient folder are skipped.
 
 Steps 1, 2 and 5 on their own still make everything in one go.
 
@@ -705,7 +707,8 @@ class App:
         if main.exists() and not messagebox.askyesno(
                 "Folder already exists",
                 f"{main.name}\n\nalready exists on the Desktop.\n"
-                "Update its CaseNotes and add the new files? Existing files are not overwritten."):
+                "Update its CaseNotes and add the new files? Existing files are not overwritten; "
+                "with a revision, earlier rounds' files move into their round's subfolder."):
             return
 
         try:
@@ -720,11 +723,15 @@ class App:
                 self.notes_text, _ = core.read_casenotes(self.notes_file)
             if rx:
                 core.copy_files([(rx, core.plan_rx_copy(rx, main, d))])
-            plan = core.plan_file_copies(items, d, main, [f["stage"] for f in self.files])
+            stages = [f["stage"] for f in self.files]
+            # Plan both before touching anything: the copies are planned for the folder
+            # as it will be once the earlier rounds' files have moved down.
+            plan = core.plan_file_copies(items, d, main, stages)
+            moved = core.move_files(core.plan_folder_moves(items, d, main, stages))
             copied = core.copy_files(list(zip([f["src"] for f in self.files], plan)))
         except Exception as e:
             messagebox.showerror("Error", f"Something went wrong:\n{e}\n\n"
-                                          "Check the folder; some files may have been copied.")
+                                          "Check the folder; some files may have been moved or copied.")
             return
 
         self._remember(d)
@@ -733,6 +740,8 @@ class App:
             contents += ", the Rx PDF"
         already = sum(1 for dests in plan if not dests)
         skipped = f"\n{already} file(s) were already there and left as they are." if already else ""
+        if moved:
+            skipped += f"\n{len(moved)} earlier file(s) moved into their round's subfolder."
         messagebox.showinfo("Done", f"Folder ready with {contents} and {len(copied)} file(s):\n\n{main}"
                                     + skipped)
         self.clear_files()

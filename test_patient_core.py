@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import tempfile
 import unittest
 from datetime import date
@@ -419,37 +420,84 @@ class PlanAndCopyTests(unittest.TestCase):
                                 [self.main / "3D Viewer" / "1234-QWER_MDL_MX_T_EST_Chicago.stl"],
                                 []])
 
-    def test_revisions_get_subfolders(self):
-        rev = self.src / "Revision 1"
-        rev.mkdir()
-        (rev / "upper.dcm").write_text("revised")
-        items = [(self.make("upper.dcm"), "MX_DCM"), (self.make("s1.png"), "SCREENSHOT"),
-                 (self.make("upper model.stl"), "MDL_MX"), (self.make("upper.stl"), "MX"),
-                 (self.make("1234 export.zip"), "KEEP"),
-                 (rev / "upper.dcm", "MX_DCM"), (self.make("s1 rev 2.png"), "SCREENSHOT")]
-        stages = [core.file_stage(src, self.src) for src, _ in items]
-        self.assertEqual(stages, [0, 0, 0, 0, 0, 1, 2])
+    def rel(self, paths):
+        return [p.relative_to(self.main).as_posix() for p in paths]
 
-        def rel(plan):
-            return [[p.relative_to(self.main).as_posix() for p in dests] for dests in plan]
+    def run_round(self, items):
+        """Create for one round, as the GUI does: moves first, then copies."""
+        stages = [core.file_stage(src, self.src) for src, _ in items]
+        plan = core.plan_file_copies(items, case(), self.main, stages)
+        moves = core.plan_folder_moves(items, case(), self.main, stages)
+        core.move_files(moves)
+        core.copy_files(zip([src for src, _ in items], plan))
+        return [self.rel(dests) for dests in plan], [(self.rel([a])[0], self.rel([b])[0]) for a, b in moves]
+
+    def tree(self, sub):
+        return sorted(p.relative_to(self.main / sub).as_posix()
+                      for p in (self.main / sub).rglob("*") if p.is_file())
+
+    def test_revisions(self):
+        for n, text in ((1, "rev 1"), (2, "rev 2")):
+            (self.src / f"Revision {n}").mkdir()
+            (self.src / f"Revision {n}" / "upper.dcm").write_text(text)
+        (self.src / "Revision 1" / "s2.png").write_text("shot 2")
+        first = [(self.make("upper.dcm"), "MX_DCM"), (self.make("lower.dcm"), "MD_DCM"),
+                 (self.make("s1.png"), "SCREENSHOT"), (self.make("upper model.stl"), "MDL_MX"),
+                 (self.make("1234 export.zip"), "KEEP")]
+        rev1 = first + [(self.src / "Revision 1" / "upper.dcm", "MX_DCM"),
+                        (self.src / "Revision 1" / "s2.png", "SCREENSHOT")]
+        rev2 = rev1 + [(self.src / "Revision 2" / "upper.dcm", "MX_DCM")]
 
         # The first send, before any revision, is flat.
-        first = core.plan_file_copies(items[:5], case(), self.main, stages[:5])
-        self.assertEqual(rel(first)[:2], [["3D Viewer/1234-QWER_MX_T_EST.dcm"],
-                                          ["Design Screenshots/s1.png"]])
-        core.copy_files(zip([src for src, _ in items], first))
+        plan, moves = self.run_round(first)
+        self.assertEqual(plan[:3], [["3D Viewer/1234-QWER_MX_T_EST.dcm"],
+                                    ["3D Viewer/1234-QWER_MD_T_EST.dcm"],
+                                    ["Design Screenshots/s1.png"]])
+        self.assertEqual(moves, [])
 
-        # With a revision, the viewer and screenshot folders split by round; the rest stay
-        # flat, and what the first send already put there is not copied again.
-        self.assertEqual(rel(core.plan_file_copies(items, case(), self.main, stages)), [
-            ["3D Viewer/Initial Design/1234-QWER_MX_T_EST.dcm"],
-            ["Design Screenshots/Initial Design/s1.png"],
-            ["3D Viewer/Initial Design/1234-QWER_MDL_MX_T_EST_Chicago.stl"],
-            [],
-            [],
-            ["3D Viewer/Revision 1/1234-QWER_MX_T_EST.dcm"],      # same standard name
-            ["Design Screenshots/Revision 2/s1 rev 2.png"],
+        # Revision 1 replaces the upper: the initial one moves down, the new one goes on top
+        # as _REV_1. Screenshots split by round. Nothing already there is copied again.
+        plan, moves = self.run_round(rev1)
+        self.assertEqual(moves, [
+            ("Design Screenshots/s1.png", "Design Screenshots/Initial Design/s1.png"),
+            ("3D Viewer/1234-QWER_MX_T_EST.dcm", "3D Viewer/Initial Design/1234-QWER_MX_T_EST.dcm"),
         ])
+        self.assertEqual(plan, [[], [], [], [], [],
+                                ["3D Viewer/1234-QWER_MX_T_EST_REV_1.dcm"],
+                                ["Design Screenshots/Revision 1/s2.png"]])
+
+        # Revision 2 replaces the upper again: REV_1 moves into Revision 1.
+        plan, moves = self.run_round(rev2)
+        self.assertEqual(moves, [("3D Viewer/1234-QWER_MX_T_EST_REV_1.dcm",
+                                  "3D Viewer/Revision 1/1234-QWER_MX_T_EST_REV_1.dcm")])
+        self.assertEqual(plan, [[]] * 7 + [["3D Viewer/1234-QWER_MX_T_EST_REV_2.dcm"]])
+        self.assertEqual(self.tree("3D Viewer"), [
+            "1234-QWER_MDL_MX_T_EST_Chicago.stl",
+            "1234-QWER_MD_T_EST.dcm",                       # never replaced: stays on top
+            "1234-QWER_MX_T_EST_REV_2.dcm",
+            "Initial Design/1234-QWER_MX_T_EST.dcm",
+            "Revision 1/1234-QWER_MX_T_EST_REV_1.dcm",
+        ])
+        self.assertEqual(self.tree("Design Screenshots"), ["Initial Design/s1.png",
+                                                           "Revision 1/s2.png"])
+        self.assertEqual((self.main / "3D Viewer" / "1234-QWER_MX_T_EST_REV_2.dcm").read_text(),
+                         "rev 2")
+        self.assertTrue(all(src.exists() for src, _ in rev2))     # the working folder is untouched
+
+    def test_moves_into_a_folder_from_the_previous_version(self):
+        # The previous version copied the initial round into Initial Design, beside the flat files.
+        shot, dcm = self.make("s1.png"), self.make("upper.dcm")
+        for rel in ("Design Screenshots/s1.png", "Design Screenshots/Initial Design/s1.png"):
+            (self.main / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(shot, self.main / rel)
+        (self.main / "Design Screenshots" / "old.png").write_text("not in the working folder")
+        (self.main / "Design Screenshots" / "Initial Design" / "old.png").write_text("different")
+        (self.src / "Revision 1").mkdir()
+        (self.src / "Revision 1" / "upper.dcm").write_text("rev 1")
+        self.run_round([(shot, "SCREENSHOT"), (dcm, "MX_DCM"),
+                        (self.src / "Revision 1" / "upper.dcm", "MX_DCM")])
+        self.assertEqual(self.tree("Design Screenshots"), [   # the duplicate is not kept twice
+            "Initial Design/old.png", "Initial Design/old_02.png", "Initial Design/s1.png"])
 
     def test_copy_keeps_originals(self):
         src = self.make("upper.stl", "mesh")
