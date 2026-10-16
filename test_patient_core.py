@@ -1,8 +1,6 @@
 """Unit tests for patient_core. Run with:  python -m unittest -v"""
 
 import json
-import os
-import shutil
 import tempfile
 import unittest
 from datetime import date
@@ -484,20 +482,18 @@ class PlanAndCopyTests(unittest.TestCase):
                          "rev 2")
         self.assertTrue(all(src.exists() for src, _ in rev2))     # the working folder is untouched
 
-    def test_moves_into_a_folder_from_the_previous_version(self):
-        # The previous version copied the initial round into Initial Design, beside the flat files.
-        shot, dcm = self.make("s1.png"), self.make("upper.dcm")
-        for rel in ("Design Screenshots/s1.png", "Design Screenshots/Initial Design/s1.png"):
-            (self.main / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(shot, self.main / rel)
-        (self.main / "Design Screenshots" / "old.png").write_text("not in the working folder")
-        (self.main / "Design Screenshots" / "Initial Design" / "old.png").write_text("different")
+    def test_moves_never_land_on_a_file(self):
+        shots = self.main / "Design Screenshots"
+        (shots / "Initial Design").mkdir(parents=True)
+        (shots / "s1.png").write_text("first send")
+        (shots / "Initial Design" / "s1.png").write_text("put there by hand")
         (self.src / "Revision 1").mkdir()
-        (self.src / "Revision 1" / "upper.dcm").write_text("rev 1")
-        self.run_round([(shot, "SCREENSHOT"), (dcm, "MX_DCM"),
-                        (self.src / "Revision 1" / "upper.dcm", "MX_DCM")])
-        self.assertEqual(self.tree("Design Screenshots"), [   # the duplicate is not kept twice
-            "Initial Design/old.png", "Initial Design/old_02.png", "Initial Design/s1.png"])
+        (self.src / "Revision 1" / "s2.png").write_text("shot 2")
+        plan, moves = self.run_round([(self.src / "Revision 1" / "s2.png", "SCREENSHOT")])
+        self.assertEqual(moves, [("Design Screenshots/s1.png",
+                                  "Design Screenshots/Initial Design/s1_02.png")])
+        self.assertEqual(self.tree("Design Screenshots"), [
+            "Initial Design/s1.png", "Initial Design/s1_02.png", "Revision 1/s2.png"])
 
     def test_copy_keeps_originals(self):
         src = self.make("upper.stl", "mesh")
@@ -580,7 +576,7 @@ class PlanAndCopyTests(unittest.TestCase):
     def test_working_folder_files(self):
         base = self.root / "Desktop" / core.base_folder_name(case())
         notes, rx = core.create_initial_folder(base, case(), self.make("Lab Rx.pdf", "rx"))
-        for rel in ("upper.stl", "shots/front.png", "CaseNotes.txt", "desktop.ini", "~lock.tmp",
+        for rel in ("upper.stl", "shots/front.png", "desktop.ini", "~lock.tmp",
                     "3D Viewer/1234-QWER_MX_T_EST.dcm", "1234-QWER STL/old.stl", "other.pdf"):
             (base / rel).parent.mkdir(exist_ok=True)
             (base / rel).write_text("x")
@@ -588,9 +584,6 @@ class PlanAndCopyTests(unittest.TestCase):
         self.assertEqual(found_rx, rx)
         self.assertEqual([f.relative_to(base).as_posix() for f in files],
                          ["other.pdf", "shots/front.png", "upper.stl"])
-        # a working folder whose Rx got the "!" from an earlier version still has it recognised
-        banged = rx.rename(base / "!1234-QWER_T_EST_Rx.pdf")
-        self.assertEqual(core.working_folder_files(notes, case()), (banged, files))
         # CaseNotes sitting somewhere not named for the patient: leave the neighbours alone
         loose = self.make("1234-QWER_T_EST_CaseNotes.txt")
         self.make("someone elses.stl")
@@ -609,14 +602,6 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(core.load_settings(path), {"designer": "Josh"})
             path.write_text("{not json")
             self.assertEqual(core.load_settings(path), {})          # corrupt file
-
-    def test_settings_from_the_old_name_are_kept(self):
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
-            self.assertEqual(core.settings_path(), Path(tmp) / "DesignerFileTool" / "settings.json")
-            core.save_settings({"designer": "Josh"}, core.settings_path("PatientAdminTool"))
-            self.assertEqual(core.load_settings(), {"designer": "Josh"})
-            core.save_settings({"designer": "Mia"})                 # saves under the new name
-            self.assertEqual(core.load_settings(), {"designer": "Mia"})
 
 
 class ListsTests(unittest.TestCase):

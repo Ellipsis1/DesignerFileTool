@@ -160,8 +160,7 @@ def base_folder_name(d):
 
 
 # In the working folder the CaseNotes name starts with this, so Explorer sorts it above
-# whatever the designer saves there (symbols sort before digits and letters). Working
-# folders made by earlier versions have it on the Rx PDF too.
+# whatever the designer saves there (symbols sort before digits and letters).
 WORKING_PREFIX = "!"
 
 
@@ -741,11 +740,12 @@ def _plan(items, d, main_folder, stages):
         return folder / name, s
 
     def move(f, folder):
-        dest, s = free_name(f, folder, f.stem, f.suffix)
-        moves.append((f, dest))
+        name, n = f.name, 2
+        while state(f, folder / name) != "free":      # never onto a file already there
+            name, n = f"{f.stem}_{n:02d}{f.suffix}", n + 1
+        moves.append((f, folder / name))
         vacated.add(f)
-        if s == "free":
-            arrived[dest] = f
+        arrived[folder / name] = f
 
     def loose_files(folder):
         if not (main_folder and folder.is_dir()):
@@ -852,27 +852,18 @@ def plan_rx_copy(pdf, main_folder, d):
 # Settings (remembered between runs, per Windows user)
 # =============================================================================
 APP_NAME = "DesignerFileTool"
-OLD_APP_NAME = "PatientAdminTool"   # the tool's earlier name; its saved settings are still read
 
 
-def settings_path(app=APP_NAME):
+def settings_path():
     """%APPDATA%\\DesignerFileTool\\settings.json on Windows, ~/.designerfiletool elsewhere."""
     appdata = os.environ.get("APPDATA")
-    base = Path(appdata) / app if appdata else Path.home() / f".{app.lower()}"
+    base = Path(appdata) / APP_NAME if appdata else Path.home() / f".{APP_NAME.lower()}"
     return base / "settings.json"
 
 
 def load_settings(path=None):
-    """Return saved settings, or {} if the file is missing or unreadable.
-
-    With no path, settings saved under the old PatientAdminTool name are used until
-    the new name has its own, so the last designer is remembered across the rename.
-    """
-    if path is None:
-        path = settings_path()
-        if not path.exists():
-            path = settings_path(OLD_APP_NAME)
-    path = Path(path)
+    """Return saved settings, or {} if the file is missing or unreadable."""
+    path = Path(path) if path else settings_path()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
@@ -999,10 +990,7 @@ def working_folder_files(notes_path, d):
         if (not f.is_file() or f == notes or name in _IGNORED_FILES or name.startswith((".", "~"))
                 or (len(parts) > 1 and parts[0].lower() in finished)):
             continue
-        if len(parts) == 1 and name.endswith("casenotes.txt"):
-            continue                                    # an older copy of the notes
-        if (len(parts) == 1 and f.suffix.lower() == ".pdf"
-                and name.removeprefix(WORKING_PREFIX).startswith(rx_stem)):
+        if len(parts) == 1 and f.suffix.lower() == ".pdf" and name.startswith(rx_stem):
             rx.append(f)
         else:
             files.append(f)
@@ -1036,14 +1024,10 @@ def write_final_casenotes(src, main_folder, notes_name, d):
 
 
 def move_files(moves):
-    """Carry out plan_folder_moves. A file whose identical copy is already at its
-    destination (left there by an earlier version) is removed instead, so it isn't kept twice."""
+    """Carry out plan_folder_moves. A destination taken since it was planned is skipped."""
     done = []
     for src, dest in moves:
         if dest.exists():
-            if filecmp.cmp(src, dest, shallow=False):
-                src.unlink()
-                done.append(dest)
             continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(src, dest)

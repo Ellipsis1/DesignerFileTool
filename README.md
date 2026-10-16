@@ -116,8 +116,6 @@ Keep each round's files in the working folder (the initial ones on top, each rev
 
 Put `DesignerFileTool.exe` and `lists.json` in the same folder and run the exe. No Python install is needed.
 
-The tool used to be called Patient Admin Tool. To upgrade, replace `PatientAdminTool.exe` with `DesignerFileTool.exe` in the same folder (`lists.json` stays) and update any shortcuts. The last-selected designer carries over.
-
 ### From source
 
 Requires Windows and Python 3 with Tkinter (developed on 3.13).
