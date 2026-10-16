@@ -13,6 +13,37 @@ A case is handled in two steps.
 
 Dropping an Rx PDF, adding the case files and clicking **Create Folder + Notes + Files** does both steps at once.
 
+### Arch type and center from the Rx
+
+The Rx's arch checkboxes can't be read from the PDF, so the arch type is guessed from the **Plan of Treatment**. The text is split at each "Upper" and "Lower", and each arch's treatment is sorted into a kind (first match wins):
+
+| The arch's treatment says | Kind |
+|---|---|
+| Partial | not designed: that arch is left out |
+| Overdenture, or Implant with Denture ("Implant Supported Denture") | OD |
+| Zirconia, Hybrid, Bridge, Arch Replacement, Fixed, AO4 | AO4 |
+| Denture | CD |
+| nothing recognised | AO4 |
+
+An arch with no treatment of its own shares the next one's, so "Upper and Lower Dentures" is CD for both. The two kinds then pick the arch type:
+
+| Plan of Treatment | Arch type |
+|---|---|
+| Lower Zirconia Arch Replacement | LAO4 |
+| Upper and Lower Zirconia Arch Replacement | DAO4 |
+| Upper Partial Denture and Lower Zirconia Arch Replacement | LAO4 |
+| Upper and Lower Dentures | Double CD |
+| Upper Denture and Lower Implant Bridge | Double - MxCD-LAO4 |
+| Upper Denture and Lower Essential Hybrid Arch Replacement | Double - MxCD-LAO4 |
+| Lower Implant Supported Denture | Lower - MdOD |
+| Upper Overdenture and Lower Denture | Double - MdCD-UOD |
+
+If both arches are partial, the arch type is left blank for you to choose. If `lists.json` no longer has the type that was picked, the guess falls back to UAO4, LAO4 or DAO4.
+
+The **center** is the longest center name found in the practice address at the top of the Rx, or failing that anywhere on the first page. Anything in parentheses is ignored, and a center ending in a state code needs that state too, as the code or spelled out: `Columbia SC (Metro)` matches "Columbia, South Carolina", not "Columbia, MD".
+
+Both are guesses: check the arch type and center on the form before creating the folder.
+
 ### Output
 
 For patient `T. Est 1234-QWER` at the `Chicago` center:
