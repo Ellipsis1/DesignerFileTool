@@ -18,7 +18,8 @@ lists.json
 # Sample Rx PDFs for testing the parser (patient data, never commit)
 sample_rx/
 
-# PyInstaller output (dist/ holds a copy of lists.json); the exe ships as a GitHub Release asset
-dist/
+# PyInstaller output (dist/ holds a copy of lists.json); only the exe is committed
+dist/*
+!dist/PatientAdminTool.exe
 build/
 *.spec

@@ -15,7 +15,7 @@ python -m unittest test_patient_core.DateTests.test_formats   # single test
 
 `pdfplumber` and `tkinterdnd2` are optional at runtime: imports are guarded (`core.PDF_AVAILABLE`, `DND_AVAILABLE`) and the GUI degrades to click-to-browse / manual entry. Keep new optional deps behind the same pattern.
 
-Build the exe (no spec file is kept; `build/`, `dist/` and `*.spec` are gitignored), then copy `lists.json` into `dist/`. The exe is not committed: it ships as an asset on a GitHub Release (tag `vYYYY.MM.DD`, `gh release create <tag> dist/PatientAdminTool.exe`). `lists.json` is never uploaded:
+Build the exe (no spec file is kept; `build/`, `*.spec` and everything in `dist/` but the exe are gitignored), then copy `lists.json` into `dist/`. `dist/PatientAdminTool.exe` is committed, so rebuild and commit it alongside code changes that should ship; `lists.json` never is:
 
 ```
 pyinstaller --noconfirm --clean --onefile --windowed --name PatientAdminTool --collect-all tkinterdnd2 PatientAdminTool.py
