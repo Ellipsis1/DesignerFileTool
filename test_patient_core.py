@@ -154,6 +154,67 @@ class ArchFromTreatmentTests(unittest.TestCase):
         self.assertEqual(core.arch_from_treatment("Upper and Lower Zirconia"), "DAO4")
         self.assertIsNone(core.arch_from_treatment(""))
 
+    def test_kinds_per_arch(self):
+        cases = {
+            "Upper Partial Denture and Lower Zirconia Arch Replacement": "LAO4",
+            "Upper and Lower Dentures": "Double CD",
+            "Upper Denture and Lower Essential Hybrid Arch Replacement": "Double - MxCD-LAO4",
+            "Upper Denture and Lower Implant Bridge": "Double - MxCD-LAO4",
+            "Upper and Lower Endura Zirconia Arch Replacement": "DAO4",
+            "Lower Implant Supported Denture": "Lower - MdOD",
+            "Upper Overdenture and Lower Denture": "Double - MdCD-UOD",
+            "Upper Zirconia Arch Replacement and Lower Overdenture": "Double - UAO4-LOD",
+            "Upper Denture": "Upper - MxCD",
+        }
+        for pot, arch in cases.items():
+            with self.subTest(pot):
+                self.assertEqual(core.arch_from_treatment(pot), arch)
+
+    def test_partials_are_left_blank(self):
+        self.assertIsNone(core.arch_from_treatment("Upper and Lower Partial Dentures"))
+        self.assertIsNone(core.arch_from_treatment("Upper Partial Denture"))
+
+    def test_arch_type_fields(self):
+        self.assertEqual(core.arch_from_treatment("Zirconia Arch Replacement", "Monoblock",
+                                                  "Monoblock"), "DAO4")
+        # a filled-in field doesn't bring back an arch the plan calls partial
+        self.assertEqual(core.arch_from_treatment(
+            "Upper Partial Denture and Lower Zirconia Arch Replacement", "Monoblock",
+            "Monoblock"), "LAO4")
+
+    def test_renamed_type_falls_back(self):
+        saved = list(core.ARCH_TYPES)
+        try:
+            core.ARCH_TYPES.remove("Double CD")
+            self.assertEqual(core.arch_from_treatment("Upper and Lower Dentures"), "DAO4")
+        finally:
+            core.ARCH_TYPES[:] = saved
+
+
+class GuessCenterTests(unittest.TestCase):
+    CENTERS = ["Charlotte", "Charlotte - University City", "Columbia MD", "Columbia SC (Metro)",
+               "Columbus", "St Louis", "Woburn"]
+
+    def guess(self, text):
+        with mock.patch.object(core, "CENTERS", self.CENTERS):
+            return core.guess_center(text)
+
+    def test_state_tells_similar_names_apart(self):
+        self.assertEqual(self.guess("Dental Implants 1 Main St Columbia, South Carolina 29201\n"
+                                    "Lab Rx\n"), "Columbia SC (Metro)")
+        self.assertEqual(self.guess("Practice 2 Elm Rd Columbia, MD 21044\nLab Rx\n"),
+                         "Columbia MD")
+
+    def test_address_line_comes_first(self):
+        text = ("Implant Dentistry Associates of Metro Charlotte, P.C. Fort Mill, South Carolina\n"
+                "Lab Rx\nNote: same as the Woburn case\n")
+        self.assertEqual(self.guess(text), "Charlotte")
+        self.assertEqual(self.guess("Practice, Woburn, Massachusetts\nLab Rx\n"), "Woburn")
+
+    def test_punctuation_and_misses(self):
+        self.assertEqual(self.guess("Clinic, St. Louis, Missouri\nLab Rx\n"), "St Louis")
+        self.assertIsNone(self.guess("Clinic, Boston, Massachusetts\nLab Rx\n"))
+
 
 class FakePage:
     """Stands in for a pdfplumber page: words are (text, x0, top)."""

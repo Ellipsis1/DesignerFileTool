@@ -385,21 +385,102 @@ def _right_of(row, x, xmax=10_000):
     return " ".join(w['text'] for w in row if x < w['x0'] < xmax).strip()
 
 
+_FIXED_RE = re.compile(r"zirconia|hybrid|bridge|arch replacement|fixed|\bao4\b|all[- ]on[- ]4")
+_SIDE_RE = re.compile(r"\b(upper|lower)\b")
+PARTIAL = "PARTIAL"
+
+# (upper kind, lower kind) -> arch type; None means that arch is not designed.
+_ARCH_BY_KINDS = {
+    ("AO4", None): "UAO4", ("CD", None): "Upper - MxCD", ("OD", None): "Upper - MxOD",
+    (None, "AO4"): "LAO4", (None, "CD"): "Lower - MdCD", (None, "OD"): "Lower - MdOD",
+    ("AO4", "AO4"): "DAO4", ("CD", "CD"): "Double CD", ("OD", "OD"): "Double OD",
+    ("CD", "AO4"): "Double - MxCD-LAO4", ("CD", "OD"): "Double - MxCD-LOD",
+    ("OD", "AO4"): "Double - UOD-LAO4", ("AO4", "OD"): "Double - UAO4-LOD",
+    ("AO4", "CD"): "Double - MdCD-UAO4", ("OD", "CD"): "Double - MdCD-UOD",
+}
+
+
+def treatment_kind(text):
+    """'AO4', 'CD', 'OD' or PARTIAL from one arch's treatment text; None if it names none."""
+    t = (text or "").lower()
+    if "partial" in t:
+        return PARTIAL
+    if "overdenture" in t or "over denture" in t:
+        return "OD"
+    if _FIXED_RE.search(t):           # before 'denture': a hybrid denture is fixed
+        return "AO4"
+    if "denture" in t:
+        return "OD" if "implant" in t else "CD"
+    return None
+
+
 def arch_from_treatment(plan_of_treatment, upper_arch_value="", lower_arch_value=""):
     """Default arch type from the Plan of Treatment text.
 
-    The PDF's arch checkboxes are not in the text layer, so we infer the side:
-    'Lower Zirconia Arch Replacement' -> LAO4, upper -> UAO4, both -> DAO4.
+    The PDF's arch checkboxes are not in the text layer, so each arch's treatment is read
+    from the text after its 'Upper' / 'Lower': 'Upper Denture and Lower Implant Bridge'
+    -> 'Double - MxCD-LAO4'. A part with no treatment of its own ('Upper and Lower
+    Dentures') shares the next one's. Partials are not designed, so that arch is left out;
+    an arch named with no known treatment counts as AO4. The Arch Type fields only add an
+    arch the plan doesn't name (their value, e.g. 'Monoblock', says nothing of the kind).
     """
     pot = (plan_of_treatment or "").lower()
-    up = bool(upper_arch_value) or "upper" in pot
-    lo = bool(lower_arch_value) or "lower" in pot
-    if up and lo:
-        return "DAO4"
-    if lo:
-        return "LAO4"
-    if up:
-        return "UAO4"
+    marks = list(_SIDE_RE.finditer(pot))
+    parts = [(m.group(1), pot[m.start():marks[i + 1].start() if i + 1 < len(marks) else None])
+             for i, m in enumerate(marks)]
+    kinds, nxt = {}, None
+    for side, text in reversed(parts):
+        nxt = treatment_kind(text) or nxt
+        kinds[side] = nxt or "AO4"    # reversed: the first part for a side wins
+    for side, value in (("upper", upper_arch_value), ("lower", lower_arch_value)):
+        if side not in kinds and value:
+            kinds[side] = treatment_kind(value) or "AO4"
+    up, lo = (None if kinds.get(s) == PARTIAL else kinds.get(s) for s in ("upper", "lower"))
+    if not (up or lo):
+        return None
+    arch = _ARCH_BY_KINDS[(up, lo)]
+    if arch in ARCH_TYPES:
+        return arch
+    return "DAO4" if up and lo else "UAO4" if up else "LAO4"   # lists.json renamed it
+
+
+_STATES = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
+    "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
+    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois",
+    "IN": "Indiana", "IA": "Iowa", "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana",
+    "ME": "Maine", "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan",
+    "MN": "Minnesota", "MS": "Mississippi", "MO": "Missouri", "MT": "Montana",
+    "NE": "Nebraska", "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey",
+    "NM": "New Mexico", "NY": "New York", "NC": "North Carolina", "ND": "North Dakota",
+    "OH": "Ohio", "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania",
+    "RI": "Rhode Island", "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee",
+    "TX": "Texas", "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+
+
+def _center_in(center, text):
+    """Whether a center's place name is in the text: 'Atlanta - Decatur' looks for
+    Decatur, 'Columbia SC (Metro)' for Columbia plus SC or South Carolina."""
+    base = re.sub(r"\(.*?\)", "", center.split(" - ")[-1]).strip()
+    m = re.fullmatch(r"(.+?)\s+([A-Z]{2})", base)
+    state = _STATES.get(m.group(2)) if m else None
+    city = m.group(1) if state else base
+    city_re = r"\.?\s+".join(re.escape(w) for w in city.split())   # 'St Louis' = 'St. Louis'
+    if not re.search(rf"\b{city_re}\b", text, re.IGNORECASE):
+        return False
+    return not state or re.search(rf"\b(?:{m.group(2)}|{state})\b", text) is not None
+
+
+def guess_center(text):
+    """Best-guess center from the Rx's first page: the longest matching name, looked for
+    first in the practice address above 'Lab Rx', then anywhere on the page."""
+    header = re.split(r"^\s*Lab Rx\b", text, maxsplit=1, flags=re.MULTILINE)[0]
+    for where in (header, text):
+        for c in sorted(CENTERS, key=len, reverse=True):
+            if _center_in(c, where):
+                return c
     return None
 
 
@@ -450,11 +531,9 @@ def parse_rx_pdf(path):
         arch = arch_from_treatment(pot, upper_at, lower_at)
         if arch:
             out['arch_type'] = arch
-    for c in sorted(CENTERS, key=len, reverse=True):
-        base = c.split(" - ")[-1]
-        if re.search(rf"\b{re.escape(base)}\b", full1, re.IGNORECASE):
-            out['center'] = c
-            break
+        center = guess_center(full1)
+        if center:
+            out['center'] = center
     return out
 
 
