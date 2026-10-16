@@ -1,6 +1,7 @@
 """Unit tests for patient_core. Run with:  python -m unittest -v"""
 
 import json
+import os
 import tempfile
 import unittest
 from datetime import date
@@ -560,6 +561,14 @@ class SettingsTests(unittest.TestCase):
             self.assertEqual(core.load_settings(path), {"designer": "Josh"})
             path.write_text("{not json")
             self.assertEqual(core.load_settings(path), {})          # corrupt file
+
+    def test_settings_from_the_old_name_are_kept(self):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"APPDATA": tmp}):
+            self.assertEqual(core.settings_path(), Path(tmp) / "DesignerFileTool" / "settings.json")
+            core.save_settings({"designer": "Josh"}, core.settings_path("PatientAdminTool"))
+            self.assertEqual(core.load_settings(), {"designer": "Josh"})
+            core.save_settings({"designer": "Mia"})                 # saves under the new name
+            self.assertEqual(core.load_settings(), {"designer": "Mia"})
 
 
 class ListsTests(unittest.TestCase):

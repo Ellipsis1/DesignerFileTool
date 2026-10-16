@@ -1,4 +1,4 @@
-# Patient Admin Tool
+# Designer File Tool
 
 A Windows desktop app for dental lab designers. It reads a lab Rx PDF, fills in the case information, and builds the patient folder: CaseNotes, the Rx, and the case files (STL, DCM, screenshots), each renamed and filed to a fixed convention.
 
@@ -104,7 +104,9 @@ A case with no revision is laid out flat, as shown under Output. If the folder f
 
 ### From the exe
 
-Put `PatientAdminTool.exe` and `lists.json` in the same folder and run the exe. No Python install is needed.
+Put `DesignerFileTool.exe` and `lists.json` in the same folder and run the exe. No Python install is needed.
+
+The tool used to be called Patient Admin Tool. To upgrade, replace `PatientAdminTool.exe` with `DesignerFileTool.exe` in the same folder (`lists.json` stays) and update any shortcuts. The last-selected designer carries over.
 
 ### From source
 
@@ -114,7 +116,7 @@ Requires Windows and Python 3 with Tkinter (developed on 3.13).
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-python PatientAdminTool.py
+python DesignerFileTool.py
 ```
 
 `pdfplumber` (PDF reading) and `tkinterdnd2` (drag and drop) are optional. Without them the app still runs, with manual entry and click-to-browse instead.
@@ -143,7 +145,7 @@ The designer, center and arch-type dropdowns are read from a `lists.json` beside
 ## Building the exe
 
 ```
-pyinstaller --noconfirm --clean --onefile --windowed --name PatientAdminTool --collect-all tkinterdnd2 PatientAdminTool.py
+pyinstaller --noconfirm --clean --onefile --windowed --name DesignerFileTool --collect-all tkinterdnd2 DesignerFileTool.py
 ```
 
 The exe is written to `dist\`. Copy `lists.json` beside it before handing it out.
@@ -157,7 +159,7 @@ python -m unittest -v
 | File | Contents |
 |---|---|
 | `patient_core.py` | All logic: naming, CaseNotes text, Rx PDF parsing, file roles and copy planning. No GUI imports. |
-| `PatientAdminTool.py` | The Tkinter window only. |
+| `DesignerFileTool.py` | The Tkinter window only. |
 | `test_patient_core.py` | Unit tests for the core module. |
 | `CLAUDE.md` | Architecture notes and the invariants the code relies on. |
 

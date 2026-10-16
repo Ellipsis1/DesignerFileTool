@@ -21,6 +21,6 @@ sample_rx/
 
 # PyInstaller output (dist/ holds a copy of lists.json); only the exe is committed
 dist/*
-!dist/PatientAdminTool.exe
+!dist/DesignerFileTool.exe
 build/
 *.spec

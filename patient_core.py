@@ -781,16 +781,28 @@ def plan_rx_copy(pdf, main_folder, d):
 # =============================================================================
 # Settings (remembered between runs, per Windows user)
 # =============================================================================
-def settings_path():
-    """%APPDATA%\\PatientAdminTool\\settings.json on Windows, ~/.patientfoldercreator elsewhere."""
+APP_NAME = "DesignerFileTool"
+OLD_APP_NAME = "PatientAdminTool"   # the tool's earlier name; its saved settings are still read
+
+
+def settings_path(app=APP_NAME):
+    """%APPDATA%\\DesignerFileTool\\settings.json on Windows, ~/.designerfiletool elsewhere."""
     appdata = os.environ.get("APPDATA")
-    base = Path(appdata) / "PatientAdminTool" if appdata else Path.home() / ".patientadmintool"
+    base = Path(appdata) / app if appdata else Path.home() / f".{app.lower()}"
     return base / "settings.json"
 
 
 def load_settings(path=None):
-    """Return saved settings, or {} if the file is missing or unreadable."""
-    path = Path(path) if path else settings_path()
+    """Return saved settings, or {} if the file is missing or unreadable.
+
+    With no path, settings saved under the old PatientAdminTool name are used until
+    the new name has its own, so the last designer is remembered across the rename.
+    """
+    if path is None:
+        path = settings_path()
+        if not path.exists():
+            path = settings_path(OLD_APP_NAME)
+    path = Path(path)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}

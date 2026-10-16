@@ -8,17 +8,17 @@ Windows-only Tkinter desktop app. A virtualenv lives in `.venv/`.
 
 ```
 pip install -r requirements.txt          # pyinstaller, tkinterdnd2, pdfplumber
-python PatientAdminTool.py               # run the GUI
+python DesignerFileTool.py               # run the GUI
 python -m unittest -v                    # all tests
 python -m unittest test_patient_core.DateTests.test_formats   # single test
 ```
 
 `pdfplumber` and `tkinterdnd2` are optional at runtime: imports are guarded (`core.PDF_AVAILABLE`, `DND_AVAILABLE`) and the GUI degrades to click-to-browse / manual entry. Keep new optional deps behind the same pattern.
 
-Build the exe (no spec file is kept; `build/`, `*.spec` and everything in `dist/` but the exe are gitignored), then copy `lists.json` into `dist/`. `dist/PatientAdminTool.exe` is committed, so rebuild and commit it alongside code changes that should ship; `lists.json` never is:
+Build the exe (no spec file is kept; `build/`, `*.spec` and everything in `dist/` but the exe are gitignored), then copy `lists.json` into `dist/`. `dist/DesignerFileTool.exe` is committed, so rebuild and commit it alongside code changes that should ship; `lists.json` never is:
 
 ```
-pyinstaller --noconfirm --clean --onefile --windowed --name PatientAdminTool --collect-all tkinterdnd2 PatientAdminTool.py
+pyinstaller --noconfirm --clean --onefile --windowed --name DesignerFileTool --collect-all tkinterdnd2 DesignerFileTool.py
 ```
 
 The app is distributed as a PyInstaller exe; `core.app_dir()` resolves to the exe's folder when frozen, and the bundled `lists.json` is expected next to it. `lists.json` is gitignored (the designer and center lists are kept out of the repo), so a fresh clone has none and the lists in `patient_core.py` are placeholders.
@@ -28,7 +28,7 @@ The app is distributed as a PyInstaller exe; `core.app_dir()` resolves to the ex
 Two modules, strict split:
 
 - `patient_core.py` — all logic, no GUI imports. Unit tested by `test_patient_core.py`.
-- `PatientAdminTool.py` — the Tk window only (`App` class). It collects form values into a plain dict `d` (keys: `name_id, center, designer, arch_type, tooth_shade, stl_only, split_file, cutback, ios_box, scan_date, rx_date, due_date, surgery_date, revisions`) and passes it to core functions. New logic belongs in core, not the GUI.
+- `DesignerFileTool.py` — the Tk window only (`App` class). It collects form values into a plain dict `d` (keys: `name_id, center, designer, arch_type, tooth_shade, stl_only, split_file, cutback, ios_box, scan_date, rx_date, due_date, surgery_date, revisions`) and passes it to core functions. New logic belongs in core, not the GUI.
 
 Workflow the code implements, in two steps:
 
@@ -61,4 +61,4 @@ Dropping an Rx PDF and going straight to "Create Folder + Notes + Files" still d
 
 `designers`, `centers`, and the arch groups (`upper_arch`, `lower_arch`, `double_arch`, `other_arch`) can be overridden from JSON; a key that is missing, empty or not a list of strings keeps its built-in list. Tooth shades are hardcoded. The only source is the `lists.json` beside the app (`load_lists()`); if it is missing or unreadable the placeholder lists in `patient_core.py` stay in effect and the title shows "built-in lists". File → Reload Lists re-reads it. `apply_lists()` mutates the module-level lists **in place** (`target[:] = new`) because the GUI and `parse_rx_pdf` hold references to them — never rebind these names. Bump `version` in `lists.json` when editing it; it's shown in the window title.
 
-Per-user settings (last designer) live in `%APPDATA%\PatientAdminTool\settings.json`; save failures are deliberately swallowed.
+Per-user settings (last designer) live in `%APPDATA%\DesignerFileTool\settings.json`; save failures are deliberately swallowed. The tool was called PatientAdminTool before, so `load_settings()` falls back on `%APPDATA%\PatientAdminTool\settings.json` until the new file exists (`OLD_APP_NAME`); the core module keeps the name `patient_core.py`.

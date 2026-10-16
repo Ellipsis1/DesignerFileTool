@@ -1,6 +1,6 @@
 """
-Patient Folder & Case Notes Creator
------------------------------------
+Designer File Tool
+------------------
 Starting a case:
 1. Drop (or browse for) the Rx PDF. It fills in what it can.
 2. Pick the rest from the dropdowns and fill in the dates.
@@ -112,7 +112,7 @@ class DatePicker(tk.Toplevel):
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("Patient Admin Tool")
+        root.title("Designer File Tool")
         root.geometry("1150x900")
         root.minsize(1000, 800)
 
@@ -297,7 +297,7 @@ class App:
     # ------------------------------------------------------------------ lists
     def _update_title(self):
         suffix = f"lists {self.lists_version}" if self.lists_source else "built-in lists"
-        self.root.title(f"Patient Admin Tool  ({suffix})")
+        self.root.title(f"Designer File Tool  ({suffix})")
 
     def reload_lists(self):
         self.lists_source, self.lists_version = core.load_lists()
