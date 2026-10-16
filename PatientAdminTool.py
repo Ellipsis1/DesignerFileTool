@@ -6,8 +6,8 @@ Starting a case:
 2. Pick the rest from the dropdowns and fill in the dates.
 3. Click "Create Initial Folder + CaseNotes". A working folder like
    "T. EST 1234-QWER Chicago" appears on the Desktop holding the CaseNotes
-   and the Rx PDF (moved in), both named with the patient's ID and name
-   after a "!" that keeps them at the top of the folder.
+   and the Rx PDF (moved in), both named with the patient's ID and name;
+   the CaseNotes' name starts with a "!" that keeps it at the top of the folder.
    The designer saves models and screenshots there and edits the CaseNotes.
 
 Finishing a case:

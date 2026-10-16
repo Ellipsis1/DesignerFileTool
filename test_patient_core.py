@@ -511,14 +511,14 @@ class PlanAndCopyTests(unittest.TestCase):
         base = self.root / "Desktop" / core.base_folder_name(case())
         rx = self.make("Lab Rx.pdf", "rx")
         notes, moved = core.create_initial_folder(base, case(), rx)
-        # the "!" keeps both above anything the designer saves in the folder
+        # the "!" keeps the notes above anything the designer saves in the folder
         self.assertEqual(notes, base / "!1234-QWER_T_EST_CaseNotes.txt")
         self.assertEqual(notes.read_text(), core.build_casenotes(case()))
-        self.assertEqual(moved, base / "!1234-QWER_T_EST_Rx.pdf")
+        self.assertEqual(moved, base / "1234-QWER_T_EST_Rx.pdf")
         self.assertEqual(moved.read_text(), "rx")
         self.assertFalse(rx.exists())                             # moved, not copied
         self.assertEqual(sorted(p.name for p in base.iterdir()), [notes.name, moved.name])
-        # the finished folder's copies drop the "!"
+        # the finished folder's copies have no "!"
         self.assertEqual(core.plan_rx_copy(moved, self.main, case()),
                          [self.main / "1234-QWER_T_EST_Rx.pdf"])
         self.assertEqual(core.write_final_casenotes(notes, self.main, core.casenotes_name(case()),
@@ -539,9 +539,9 @@ class PlanAndCopyTests(unittest.TestCase):
         self.assertEqual(found_rx, rx)
         self.assertEqual([f.relative_to(base).as_posix() for f in files],
                          ["other.pdf", "shots/front.png", "upper.stl"])
-        # a working folder from before the "!" naming still has its Rx recognised
-        plain = rx.rename(base / "1234-QWER_T_EST_Rx.pdf")
-        self.assertEqual(core.working_folder_files(notes, case()), (plain, files))
+        # a working folder whose Rx got the "!" from an earlier version still has it recognised
+        banged = rx.rename(base / "!1234-QWER_T_EST_Rx.pdf")
+        self.assertEqual(core.working_folder_files(notes, case()), (banged, files))
         # CaseNotes sitting somewhere not named for the patient: leave the neighbours alone
         loose = self.make("1234-QWER_T_EST_CaseNotes.txt")
         self.make("someone elses.stl")

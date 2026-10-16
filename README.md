@@ -21,7 +21,7 @@ For patient `T. Est 1234-QWER` at the `Chicago` center:
 Desktop\
   T. EST 1234-QWER Chicago\                 working folder (step 1)
     !1234-QWER_T_EST_CaseNotes.txt
-    !1234-QWER_T_EST_Rx.pdf
+    1234-QWER_T_EST_Rx.pdf
     ...the designer's own files
 
   10.2.2026 T. EST 1234-QWER Chicago\       finished folder (step 2), dated by the Rx date

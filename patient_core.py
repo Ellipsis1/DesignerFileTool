@@ -159,8 +159,9 @@ def base_folder_name(d):
     return f"{p.init2} {p.name3} {p.uid} {p.center}"
 
 
-# In the working folder the CaseNotes and Rx names start with this, so Explorer sorts them
-# above whatever the designer saves there (symbols sort before digits and letters).
+# In the working folder the CaseNotes name starts with this, so Explorer sorts it above
+# whatever the designer saves there (symbols sort before digits and letters). Working
+# folders made by earlier versions have it on the Rx PDF too.
 WORKING_PREFIX = "!"
 
 
@@ -759,16 +760,16 @@ def plan_file_copies(items, d, main_folder=None, stages=None):
     return results
 
 
-def plan_rx_copy(pdf, main_folder, d, working=False):
+def plan_rx_copy(pdf, main_folder, d):
     """Where the Rx PDF will be copied: the patient folder, beside the CaseNotes,
-    renamed like '1234-QWER_T_EST_Rx.pdf' ('!1234-...' in the working folder).
+    renamed like '1234-QWER_T_EST_Rx.pdf'.
 
     Returns a list of destinations like plan_file_copies does. It is empty when
     that exact file is already there (Create was clicked again for the same
     case); a different file with the same name gets _02, _03, ... instead.
     """
     src, main = Path(pdf), Path(main_folder)
-    base, ext = _doc_name(d, "Rx", working), src.suffix.lower()
+    base, ext = _doc_name(d, "Rx"), src.suffix.lower()
     dest, n = main / f"{base}{ext}", 2
     while dest.exists():
         if filecmp.cmp(src, dest, shallow=False):
@@ -875,8 +876,8 @@ def create_folder_structure(main_folder, uid, notes=None, notes_name="CaseNotes.
 def create_initial_folder(base_folder, d, rx_pdf=None):
     """Start a case: the working folder, with fresh CaseNotes and the Rx PDF moved in beside them.
 
-    Both get their standard names with WORKING_PREFIX in front, which keeps them at the
-    top of the folder. Returns (CaseNotes path, Rx path); the Rx path is None when
+    Both get their standard names; the CaseNotes' has WORKING_PREFIX in front, which keeps
+    it at the top of the folder. Returns (CaseNotes path, Rx path); the Rx path is None when
     there is no Rx or that exact file is already in the folder.
     """
     base = Path(base_folder)
@@ -885,7 +886,7 @@ def create_initial_folder(base_folder, d, rx_pdf=None):
     notes.write_text(build_casenotes(d), encoding="utf-8")
     rx = None
     if rx_pdf:
-        dests = plan_rx_copy(rx_pdf, base, d, working=True)
+        dests = plan_rx_copy(rx_pdf, base, d)
         if dests:
             rx = Path(shutil.move(str(rx_pdf), dests[0]))
     return notes, rx
