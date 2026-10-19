@@ -15,7 +15,7 @@ Finishing a case:
    (Revisions included) and lists the files saved in that folder. Each file
    gets a role, which decides its new name and subfolder. Check the
    "New name" column; more files can be dropped in.
-5. Click "Create Folder + Notes + Files" for the dated patient folder.
+5. Click "Create/Update Folder + Notes + Files" for the dated patient folder.
    Case files and the Rx PDF are copied in. It gets a new CaseNotes holding
    only the case information (no file-naming examples).
 6. For a revision, save the new files in a "Revision 1" subfolder of the
@@ -289,7 +289,7 @@ class App:
     def _build_action_bar(self):
         bar = tk.Frame(self.root)
         bar.pack(fill="x", padx=10, pady=(4, 10))
-        tk.Button(bar, text="Create Folder + Notes + Files", command=self.create_all,
+        tk.Button(bar, text="Create/Update Folder + Notes + Files", command=self.create_all,
                   bg="#4CAF50", fg="white", font=("Arial", 11, "bold"),
                   padx=14, pady=6).pack(side="right", padx=4)
         tk.Button(bar, text="Create Initial Folder + CaseNotes", command=self.create_initial,

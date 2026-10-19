@@ -9,9 +9,9 @@ It replaces a legacy Excel sheet, and the names and CaseNotes text it produces m
 A case is handled in two steps.
 
 1. **Start the case.** Drop the Rx PDF onto the window. The form is pre-filled from the PDF; correct anything it missed, then click **Create Initial Folder + CaseNotes**. A working folder appears on the Desktop holding fresh CaseNotes and the Rx PDF (the PDF is moved in). Save models and screenshots there and edit the CaseNotes by hand as the design progresses.
-2. **Finish the case.** Drop the working folder's CaseNotes file onto the window. The form is filled from it and the folder's case files are listed, each with a guessed role you can change. Click **Create Folder + Notes + Files** to build the dated patient folder, with every file copied into the right subfolder under its standard name.
+2. **Finish the case.** Drop the working folder's CaseNotes file onto the window. The form is filled from it and the folder's case files are listed, each with a guessed role you can change. Click **Create/Update Folder + Notes + Files** to build the dated patient folder, with every file copied into the right subfolder under its standard name.
 
-Dropping an Rx PDF, adding the case files and clicking **Create Folder + Notes + Files** does both steps at once.
+Dropping an Rx PDF, adding the case files and clicking **Create/Update Folder + Notes + Files** does both steps at once.
 
 ### Arch type and center from the Rx
 
