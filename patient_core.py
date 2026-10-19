@@ -123,12 +123,16 @@ class Patient:
 
 
 def patient_from(name_id, center):
-    """Split 'T. TES 1234-QWER' the same way the Excel formula does."""
+    """Split 'T. TES 1234-QWER' the same way the Excel formula does.
+
+    The period after the initial may be left out: 't est 1234-qwer' reads as 'T. EST 1234-QWER'.
+    """
+    name_id = re.sub(r"^\s*([A-Za-z])\s+", r"\1. ", name_id)
     clean = name_id.replace(")", "").replace(" ", "")
     clean_p = clean.replace("(", "")
     return Patient(
         init2=clean[:2].upper(),
-        name3=clean[2:5].upper(),
+        name3=clean_p[:-9][2:5].upper(),   # before the ID, so 'T. Li 1234-QWER' gives 'LI', not 'LI1'
         uid=clean_p[-9:].upper(),
         first1=clean_p[:1].upper(),
         center=center,

@@ -41,6 +41,14 @@ class NamingTests(unittest.TestCase):
     def test_patient_split(self):
         p = core.patient_from("T. Est (1234-QWER)", "Milwaukee")
         self.assertEqual((p.init2, p.name3, p.uid, p.first1), ("T.", "EST", "1234-QWER", "T"))
+        for typed in ("t est 1234-qwer", "T Est (1234-QWER)", "  t  est 1234-qwer", "t.est 1234-qwer"):
+            p = core.patient_from(typed, "Chicago")      # the period after the initial is optional
+            self.assertEqual((p.init2, p.name3, p.uid, p.first1), ("T.", "EST", "1234-QWER", "T"), typed)
+        for typed in ("T. Li 1234-QWER", "T. Li (1234-QWER)", "t li 1234-qwer"):
+            self.assertEqual(core.patient_from(typed, "").name3, "LI", typed)   # short name: no ID characters
+        self.assertEqual(core.casenotes_name(case(name_id="T. Li (1234-QWER)")), "1234-QWER_T_LI_CaseNotes.txt")
+        self.assertEqual(core.folder_name(case(name_id="t est 1234-qwer")), "6.3.2026 T. EST 1234-QWER Chicago")
+        self.assertEqual(core.casenotes_name(case(name_id="t est 1234-qwer")), "1234-QWER_T_EST_CaseNotes.txt")
 
     def test_folder_name(self):
         self.assertEqual(core.folder_name(case()), "6.3.2026 T. EST 1234-QWER Chicago")
