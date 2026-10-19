@@ -173,13 +173,16 @@ class App:
         def label(r, text):
             tk.Label(form, text=text, font=("Arial", 9)).grid(row=r, column=0, sticky="w", pady=3)
 
-        def combo(r, text, key, values):
+        def combo(r, text, key, values, searchable=False):
             label(r, text)
             v = tk.StringVar()
             cb = ttk.Combobox(form, textvariable=v, values=values, width=26)
             cb.grid(row=r, column=1, sticky="w", padx=8, pady=3)
             cb.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
             cb.bind("<KeyRelease>", lambda e: self.update_preview())
+            cb.bind("<FocusOut>", lambda e: v.set(core.match_choice(v.get(), values) or v.get()))
+            if searchable:
+                self._make_searchable(cb, v, values)
             self.vars[key] = v
             self.combos[key] = cb
 
@@ -199,28 +202,27 @@ class App:
                       command=lambda: self._pick_date(key, e)).grid(row=r, column=2, sticky="w")
 
         entry(0, "Name & ID:", "name_id")
-        combo(1, "Center:", "center", core.CENTERS)
-        combo(2, "Designer:", "designer", core.DESIGNERS)
-        combo(3, "Arch Type:", "arch_type", core.ARCH_TYPES)
-        combo(4, "Tooth Shade:", "tooth_shade", core.TOOTH_SHADES)
-        combo(5, "STL Only?:", "stl_only", core.YESNO)
-        combo(6, "Split File?:", "split_file", core.SPLIT_OPTIONS)
-        combo(7, "Cutback?:", "cutback", core.YESNO)
-        combo(8, "IOS or Box?:", "ios_box", core.IOS_BOX)
-        date_entry(9, "Scan Date (mm/dd/yyyy):", "scan_date")
-        date_entry(10, "Rx Date (mm/dd/yyyy):", "rx_date")
-        date_entry(11, "Due by Date (mm/dd/yyyy):", "due_date")
-        date_entry(12, "Surgery Date (mm/dd/yyyy):", "surgery_date")
-        entry(13, "Revisions:", "revisions")
+        combo(1, "Center:", "center", core.CENTERS, searchable=True)
+        combo(2, "Designer:", "designer", core.DESIGNERS, searchable=True)
+        combo(3, "Arch Type:", "arch_type", core.ARCH_TYPES, searchable=True)
+        combo(4, "Split File?:", "split_file", core.SPLIT_OPTIONS)
+        combo(5, "Tooth Shade:", "tooth_shade", core.TOOTH_SHADES)
+        combo(6, "STL Only?:", "stl_only", core.YESNO)
+        combo(7, "IOS or Box?:", "ios_box", core.IOS_BOX)
+        date_entry(8, "Scan Date (mm/dd/yyyy):", "scan_date")
+        date_entry(9, "Rx Date (mm/dd/yyyy):", "rx_date")
+        date_entry(10, "Due by Date (mm/dd/yyyy):", "due_date")
+        date_entry(11, "Surgery Date (mm/dd/yyyy):", "surgery_date")
+        entry(12, "Revisions:", "revisions")
 
         tk.Button(form, text="Today", font=("Arial", 8),
-                  command=lambda: self._set_today("scan_date")).grid(row=9, column=3, sticky="w", padx=(4, 0))
+                  command=lambda: self._set_today("scan_date")).grid(row=8, column=3, sticky="w", padx=(4, 0))
         tk.Button(form, text="Today", font=("Arial", 8),
-                  command=lambda: self._set_today("rx_date")).grid(row=10, column=3, sticky="w", padx=(4, 0))
+                  command=lambda: self._set_today("rx_date")).grid(row=9, column=3, sticky="w", padx=(4, 0))
 
         self.folder_label = tk.Label(form, text="", font=("Consolas", 9), fg="#1565C0",
                                      wraplength=330, justify="left")
-        self.folder_label.grid(row=14, column=0, columnspan=4, sticky="w", pady=(8, 0))
+        self.folder_label.grid(row=13, column=0, columnspan=4, sticky="w", pady=(8, 0))
 
         self._set_defaults()
 
@@ -337,7 +339,6 @@ class App:
         for v in self.vars.values():
             v.set("")
         self.vars["split_file"].set("No")
-        self.vars["cutback"].set("No")
         self.vars["revisions"].set("0")
         self.vars["designer"].set(designer)
 
@@ -362,8 +363,9 @@ class App:
 
     def _collect(self):
         d = {k: v.get().strip() for k, v in self.vars.items()}
-        for k in ("split_file", "cutback"):
-            d[k] = d[k] or "No"
+        for key, (_, options) in core.CHOICES.items():   # 'chicago' -> 'Chicago'
+            d[key] = core.match_choice(d[key], options) or d[key]
+        d["split_file"] = d["split_file"] or "No"
         d["revisions"] = d["revisions"] or "0"
         return d
 
@@ -384,6 +386,10 @@ class App:
         for key, text in (("center", "Center"), ("arch_type", "Arch Type")):
             if not d.get(key):
                 out.append(text)
+        for key, text, value in core.invalid_choices(d):
+            if key == "designer":   # only warned about, at Create (see _designer_ok)
+                continue
+            out.append(f"{text}: '{value}' is not in the list")
         if not d.get("rx_date"):
             out.append("Rx Date (used in the folder name)")
         for key in DATE_FIELDS:
@@ -392,6 +398,43 @@ class App:
         if not d.get("revisions", "0").isdigit():
             out.append("Revisions must be a whole number")
         return out
+
+    def _make_searchable(self, cb, v, values):
+        """Narrow the dropdown to the entries containing what's typed (Down arrow opens it).
+        Enter or Tab with a single match left fills it in. The list doesn't pop open by
+        itself while typing: on Windows that takes the keyboard focus away from the box.
+        values is the core list (updated in place by Reload Lists), so filtering always
+        starts from the current list."""
+        def narrow(e):
+            if e.keysym not in ("Up", "Down", "Return", "Tab", "Escape"):
+                cb.config(values=core.filter_choices(v.get(), values))
+
+        def fill(e):
+            matches = core.filter_choices(v.get(), values)
+            if v.get().strip() and len(matches) == 1:
+                v.set(matches[0])
+                cb.icursor(tk.END)
+                cb.config(values=values)
+                self.update_preview()
+
+        def reset(e):
+            cb.config(values=values)
+
+        cb.bind("<KeyRelease>", narrow, add="+")
+        cb.bind("<Return>", fill, add="+")
+        cb.bind("<Tab>", fill, add="+")          # fills, then Tab still moves on
+        cb.bind("<<ComboboxSelected>>", reset, add="+")
+        cb.bind("<FocusOut>", reset, add="+")
+
+    @staticmethod
+    def _designer_ok(d):
+        """A designer not on the list is only a warning (a new designer may not be in
+        lists.json yet). False when the user cancels."""
+        bad = [value for key, _, value in core.invalid_choices(d) if key == "designer"]
+        return not bad or messagebox.askokcancel(
+            "Designer not in the list",
+            f"'{bad[0]}' is not in the designer list.\n\nContinue anyway?",
+            icon=messagebox.WARNING)
 
     @staticmethod
     def _split_drop(root, data):
@@ -626,6 +669,8 @@ class App:
             messagebox.showerror("Rx PDF not found",
                                  f"{self.rx_pdf.name} was moved or deleted since you loaded it.")
             return
+        if not self._designer_ok(d):
+            return
         base = core.DESKTOP / core.safe_name(core.base_folder_name(d))
         if (base / core.casenotes_name(d, working=True)).exists() and not messagebox.askyesno(
                 "CaseNotes already exist",
@@ -668,8 +713,11 @@ class App:
                                  + "\n- ".join(missing))
             return
 
+        if not self._designer_ok(d):
+            return
+
         items = [(f["src"], f["role"]) for f in self.files]
-        stl_dir = core.stl_folder_name(core.patient_from(d["name_id"], d["center"]).uid)
+        stl_dir =core.stl_folder_name(core.patient_from(d["name_id"], d["center"]).uid)
         non_stl = core.non_stl_for_stl_folder(items)
         if non_stl and not messagebox.askokcancel(
                 "Not STL files",

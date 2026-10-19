@@ -49,7 +49,7 @@ _ARCH_GROUPS = (UPPER_ARCH, LOWER_ARCH, DOUBLE_ARCH, OTHER_ARCH)
 ARCH_TYPES = [a for group in _ARCH_GROUPS for a in group]
 
 TOOTH_SHADES = ['A1', 'A2', 'A3', 'A3.5', 'A4', 'B1', 'B2', 'B3', 'B4', 'C1', 'C2',
-    'C3', 'C4', 'D2', 'D3', 'D4', 'N/A', 'BL1', 'BL2', 'BL3', 'BL4']
+    'C3', 'C4', 'D2', 'D3', 'D4', 'BL1', 'BL2', 'BL3', 'BL4', 'N/A']
 
 SPLIT_OPTIONS = ['No', 'Upper', 'Lower', 'Double']
 YESNO = ['Yes', 'No']
@@ -143,6 +143,36 @@ def is_lower(arch_type):
     return any(arch_type in group for group in (LOWER_ARCH, DOUBLE_ARCH, OTHER_ARCH))
 
 
+# Dropdown form key -> (label, list of allowed values). The lists are the module-level
+# ones, which apply_lists() updates in place, so this always checks the current lists.
+CHOICES = {"center": ("Center", CENTERS), "designer": ("Designer", DESIGNERS),
+           "arch_type": ("Arch Type", ARCH_TYPES), "split_file": ("Split File", SPLIT_OPTIONS),
+           "tooth_shade": ("Tooth Shade", TOOTH_SHADES), "stl_only": ("STL Only", YESNO),
+           "ios_box": ("IOS or Box", IOS_BOX)}
+
+
+def match_choice(value, options):
+    """The option that value names, ignoring case and outer spaces ('chicago ' -> 'Chicago'), else None."""
+    want = value.strip().lower()
+    return next((o for o in options if o.lower() == want), None)
+
+
+def filter_choices(text, options):
+    """The options a searchable dropdown offers while text is typed: those containing it,
+    ignoring case ('mx' finds 'Upper - MxOD'). Blank or an exact pick offers the whole list."""
+    want = text.strip().lower()
+    if not want or match_choice(text, options) is not None:
+        return list(options)
+    return [o for o in options if want in o.lower()]
+
+
+def invalid_choices(d):
+    """[(key, label, value)] for each dropdown field holding something not in its list. Blank
+    is not checked here (whether a field may be blank is the caller's rule)."""
+    return [(key, label, d[key]) for key, (label, options) in CHOICES.items()
+            if d.get(key, "").strip() and match_choice(d[key], options) is None]
+
+
 def stl_folder_name(uid):
     return f"{uid} STL"
 
@@ -180,17 +210,15 @@ def casenotes_name(d, working=False):
 def build_casenotes(d, today=None):
     p = patient_from(d['name_id'], d['center'])
     uid, first1, name3, init2, C7 = p.uid, p.first1, p.name3, p.init2, p.center
-    C8, C11, C12 = d['arch_type'], d['split_file'], d['cutback']
-    up, lo = is_upper(C8), is_lower(C8)
-    split = "" if C11 == "No" else f"{C11} Split File"
+    C8, C11 = d['arch_type'], d['split_file']
     today = today or date.today()
 
     out = f"Center: {C7}\n"
     out += f"Patient Name: {init2} {name3}\n"
     out += f"Unique ID: {uid}\n"
     out += f"STL Only: {d['stl_only']}\n"
-    out += f"Cutback: {C12}\n"
-    out += f"Arch Type: {C8} {split}\n"
+    out += f"Arch Type: {C8}\n"
+    out += f"Split File: {C11}\n"
     out += f"Tooth Shade: {d['tooth_shade']}\n"
     out += f"Due by Date: {fmt_date(d['due_date'])}\n"
     out += f"Surgery: {fmt_date(d['surgery_date'])}\n"
@@ -201,39 +229,12 @@ def build_casenotes(d, today=None):
     out += f"Awaiting Approval Date: {fmt_date(today)}\n"
     out += f"Revisions: {d.get('revisions') or 0}\n\n_______________________________________\n"
 
-    if up:
-        s = f"MAX STL NAME\n{uid}_MX_{first1}_{name3}_{C7}\n"
-        if C11 in ("Upper", "Double"):
-            s += f"{uid}_MX_BASE_{first1}_{name3}_{C7}\n{uid}_MX_TEETH_{first1}_{name3}_{C7}"
-        s += f"\nMAX DCM NAME\n{uid}_MX_{first1}_{name3}"
-        out += s
-    out += "\n\n"
-    if lo:
-        s = f"MAND STL NAME\n{uid}_MD_{first1}_{name3}_{C7}\n"
-        if C11 in ("Lower", "Double"):
-            s += f"{uid}_MD_BASE_{first1}_{name3}_{C7}\n{uid}_MD_TEETH_{first1}_{name3}_{C7}"
-        s += f"\nMAND DCM NAME\n{uid}_MD_{first1}_{name3}"
-        out += s
-    out += "\n\n"
-    out += f"BITE STL NAME\n{uid}_BITE_{first1}_{name3}_{C7}"
-    out += "\n\n"
-    out += (f"MODELS\n{uid}_MDL_MX_{first1}_{name3}_{C7}\n{uid}_MDL_MD_{first1}_{name3}_{C7}\n"
-            f"{uid}_WRK_MX_{first1}_{name3}\n{uid}_WRK_MD_{first1}_{name3}")
-    out += "\n\n"
-    out += (f"MAX CUTBACK STL NAME\n{uid}_MX_CUTBACK_{first1}_{name3}_{C7}"
-            if (C12 == "Yes" and up) else "")
-    out += "\n"
-    out += (f"MAND CUTBACK STL NAME\n{uid}_MD_CUTBACK_{first1}_{name3}_{C7}"
-            if (C12 == "Yes" and lo) else "")
-    out += "\n_______________________________________\n"
-    out += f"Patient Folder Name\n{folder_name(d)}\n"
-    out += f"\nSTL Folder Name\n{stl_folder_name(uid)}\n"
     out += f"\nDental System Order ID Input\n{uid}_{first1}_{name3}_{C7}"
     return out
 
 
 # CaseNotes header label -> form key, for the lines that map straight across
-_NOTE_FIELDS = {"center": "center", "stl only": "stl_only", "cutback": "cutback",
+_NOTE_FIELDS = {"center": "center", "stl only": "stl_only", "split file": "split_file",
                 "tooth shade": "tooth_shade", "due by date": "due_date",
                 "surgery": "surgery_date", "rx date": "rx_date", "scan date": "scan_date",
                 "ios or box": "ios_box", "designer": "designer", "revisions": "revisions"}
@@ -293,10 +294,11 @@ def parse_casenotes(text):
         return {}
     out = {key: raw[label] for label, key in _NOTE_FIELDS.items() if raw.get(label)}
     out["name_id"] = f"{raw.get('patient name', '')} {uid.group(0)}".strip()
+    # The old Excel sheet put the split on the Arch Type line: 'DAO4 Double Split File'
     arch, split = _ARCH_LINE.fullmatch(raw.get("arch type", "")).groups()
     if arch:
         out["arch_type"] = arch
-    out["split_file"] = split or "No"
+    out.setdefault("split_file", split or "No")
     return out
 
 
@@ -319,7 +321,7 @@ def _case_info_edits(text, d):
         changed.add("patient name")
     if was.uid != now.uid:
         changed.add("unique id")
-    if not (same("arch_type") and same("split_file")):
+    if not same("arch_type"):
         changed.add("arch type")
     built = build_casenotes(d).splitlines()
     in_notes = _header_index(text.splitlines())[0]

@@ -12,7 +12,7 @@ import patient_core as core
 
 def case(**overrides):
     d = dict(name_id="T. Est 1234-QWER", center="Chicago", arch_type="LAO4",
-             split_file="No", cutback="No", stl_only="No", tooth_shade="A2",
+             split_file="No", stl_only="No", tooth_shade="A2",
              due_date="6/11/2026", surgery_date="", rx_date="6/3/2026",
              scan_date="6/2/2026", ios_box="IOS", designer="Byron")
     d.update(overrides)
@@ -50,20 +50,18 @@ class NamingTests(unittest.TestCase):
     def test_casenotes_uses_given_today(self):
         notes = core.build_casenotes(case(), today=date(2026, 9, 29))
         self.assertIn("Awaiting Approval Date: 9/29/2026", notes)
-        self.assertIn("MAND STL NAME\n1234-QWER_MD_T_EST_Chicago", notes)
-        self.assertNotIn("MAX STL NAME", notes)
 
-    def test_arch_group_decides_which_names_are_listed(self):
-        for arch, has_max, has_mand in (("UAO4", True, False), ("LAO4", False, True),
-                                        ("DAO4", True, True), ("MODEL ONLY", True, True)):
-            notes = core.build_casenotes(case(arch_type=arch))
-            self.assertEqual("MAX STL NAME" in notes, has_max, arch)
-            self.assertEqual("MAND STL NAME" in notes, has_mand, arch)
+    def test_casenotes_end_with_order_id(self):
+        # below the ruled line only the Dental System order ID is left
+        notes = core.build_casenotes(case(arch_type="DAO4", split_file="Double"))
+        self.assertTrue(notes.endswith("Revisions: 0\n\n_______________________________________\n"
+                                       "\nDental System Order ID Input\n1234-QWER_T_EST_Chicago"))
+        self.assertNotIn("STL NAME", notes)
 
 
 class ParseCaseNotesTests(unittest.TestCase):
     def test_round_trip(self):
-        for d in (case(), case(surgery_date="6/20/2026", cutback="Yes"),
+        for d in (case(), case(surgery_date="6/20/2026"),
                   case(arch_type="Double - MxCD-LAO4", split_file="Double"),
                   case(arch_type="Double CD"), case(arch_type="MODEL ONLY", split_file="Upper"),
                   case(center="Atlanta - Decatur", tooth_shade="A3.5", ios_box="Box")):
@@ -73,6 +71,13 @@ class ParseCaseNotesTests(unittest.TestCase):
             self.assertEqual(back["arch_type"], d["arch_type"])
             self.assertEqual(back["split_file"], d["split_file"])
             self.assertEqual(core.folder_name(back), core.folder_name(d))
+
+    def test_split_on_arch_line(self):
+        # the old Excel sheet had no Split File line; the split rode on Arch Type
+        text = "Unique ID: 1234-QWER\nArch Type: DAO4 Double Split File\n"
+        back = core.parse_casenotes(text)
+        self.assertEqual((back["arch_type"], back["split_file"]), ("DAO4", "Double"))
+        self.assertEqual(core.parse_casenotes("Unique ID: 1234-QWER\nArch Type: DAO4 \n")["split_file"], "No")
 
     def test_fields(self):
         back = core.parse_casenotes(chr(0xFEFF) + core.build_casenotes(case()).replace("\n", "\r\n"))
@@ -134,11 +139,12 @@ class CaseInfoChangeTests(unittest.TestCase):
                             "split_file": "Double", "tooth_shade": ""}
         self.assertEqual(core.casenotes_changes(self.text, form),
                          [("Unique ID", "1234-QWER", "9999-ZZZZ"),
-                          ("Arch Type", "LAO4", "DAO4 Double Split File"),
+                          ("Arch Type", "LAO4", "DAO4"),
+                          ("Split File", "No", "Double"),
                           ("Tooth Shade", "A2", "")])
         out = core.apply_case_info(self.text, form)
         self.assertIn("Unique ID: 9999-ZZZZ\r\n", out)
-        self.assertIn("Arch Type: DAO4 Double Split File\r\n", out)
+        self.assertIn("Arch Type: DAO4\r\nSplit File: Double\r\n", out)
         self.assertIn("Patient Name: T. EST\r\n", out)
 
     def test_missing_line_is_added_above_revisions(self):
@@ -646,6 +652,28 @@ class ListsTests(unittest.TestCase):
         self.assertFalse(core.is_upper("UAO4"))         # no longer offered
         self.assertEqual(core.guess_role("scan.stl", "New Upper"), "MX")
         self.assertEqual(core.TOOTH_SHADES, shades)     # not editable from the JSON
+
+    def test_dropdown_values_must_be_in_their_lists(self):
+        p = self.write(json.dumps({"designers": ["Byron"], "centers": ["Chicago", "Atlanta - Decatur"]}))
+        core.apply_lists([p])
+        self.assertEqual(core.match_choice(" chicago ", core.CENTERS), "Chicago")
+        self.assertIsNone(core.match_choice("Chicgo", core.CENTERS))
+        self.assertEqual(core.invalid_choices(case(center="chicago", designer="BYRON")), [])
+        self.assertEqual(core.invalid_choices(case(tooth_shade="", ios_box="")), [])   # blank is the caller's call
+        self.assertEqual(core.invalid_choices(case(center="Chicgo", arch_type="LAO5", split_file="Yes",
+                                                   tooth_shade="Z9", stl_only="Maybe", ios_box="Mail")),
+                         [("center", "Center", "Chicgo"), ("arch_type", "Arch Type", "LAO5"),
+                          ("split_file", "Split File", "Yes"), ("tooth_shade", "Tooth Shade", "Z9"),
+                          ("stl_only", "STL Only", "Maybe"), ("ios_box", "IOS or Box", "Mail")])
+        self.assertEqual(core.filter_choices("decat", core.CENTERS), ["Atlanta - Decatur"])
+        self.assertEqual(core.filter_choices(" A", core.CENTERS), core.CENTERS)       # in both
+        self.assertEqual(core.filter_choices("chicago", core.CENTERS), core.CENTERS)  # picked: full list
+        self.assertEqual(core.filter_choices("", core.CENTERS), core.CENTERS)
+        self.assertEqual(core.filter_choices("zz", core.CENTERS), [])
+        self.assertEqual(core.filter_choices("mx", ["Upper - MxOD", "LAO4", "Double - MxCD-LAO4"]),
+                         ["Upper - MxOD", "Double - MxCD-LAO4"])
+        core.apply_lists([self.write(json.dumps({"designers": ["Zed"]}))])   # File > Reload Lists
+        self.assertEqual(core.invalid_choices(case()), [("designer", "Designer", "Byron")])
 
     def test_load_uses_file_beside_app(self):
         p = self.write(json.dumps({"version": "b1", "designers": ["Bo"]}))
