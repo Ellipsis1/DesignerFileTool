@@ -58,7 +58,8 @@ IOS_BOX = ['IOS', 'Box']
 # See JSON list
 CENTERS = ['TEST CENTER']
 
-ID_RE = re.compile(r"[A-Za-z0-9]{4}-[A-Za-z0-9]{4}")
+# Standing alone, so a hyphenated word like 'Abcdef-Ghijkl' doesn't give 'cdef-Ghij'
+ID_RE = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9]{4}-[A-Za-z0-9]{4}(?![A-Za-z0-9])")
 DESKTOP = Path.home() / "Desktop"
 
 VIEWER_DIR = "3D Viewer"
@@ -515,10 +516,10 @@ def parse_rx_pdf(path):
         # A long Note pushes the rest of the form down onto the next page, so read them all.
         for row in (r for page in pdf.pages for r in _rows(page)):
             low = " ".join(w['text'] for w in row).lower()
-            if 'name_id' not in out:
+            if 'name_id' not in out and (low.startswith('patient') or low.startswith('name:')):
                 rt = _right_of(row, 110)
                 m = ID_RE.search(rt)
-                if m and not low.startswith('unique'):
+                if m:
                     out['name_id'] = rt[:m.end()].strip()
             if 'due' in low and 'date:' in low:
                 m = re.search(r"\d{1,2}/\d{1,2}/\d{2,4}", _right_of(row, 360))

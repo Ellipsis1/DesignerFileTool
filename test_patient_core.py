@@ -252,6 +252,9 @@ class FakePage:
     def extract_words(self):
         return self.words
 
+    def words_as_tuples(self):
+        return [(w["text"], w["x0"], w["top"]) for w in self.words]
+
     def extract_text(self):
         return " ".join(w["text"] for w in self.words)
 
@@ -292,6 +295,15 @@ class RxPdfTests(unittest.TestCase):
         self.assertEqual(out["plan_of_treatment"], "Upper Zirconia Arch Replacement")
         self.assertEqual(out["arch_type"], "UAO4")      # "lower" in the note is not the plan
         self.assertEqual(out["stl_only"], "Yes")
+
+    def test_hyphenated_practice_name_is_not_the_id(self):
+        page = FakePage(
+            ("Associates", 90, 40.0), ("of", 131, 40.0), ("Abcdef-Ghijkl,", 140, 40.0),
+            ("P.C.", 206, 40.0), *self.PAGE1.words_as_tuples(),
+        )
+        out = self.parse(page, self.PAGE2)
+        self.assertEqual(out["name_id"], "T. Est 1234-QWER")
+        self.assertEqual(out["unique_id"], "1234-QWER")
 
     def test_fields_pushed_onto_page_two_are_read(self):
         out = self.parse(self.PAGE1, self.PAGE2)
