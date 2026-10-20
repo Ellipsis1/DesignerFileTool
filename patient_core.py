@@ -450,6 +450,14 @@ def arch_from_treatment(plan_of_treatment, upper_arch_value="", lower_arch_value
     return "DAO4" if up and lo else "UAO4" if up else "LAO4"   # lists.json renamed it
 
 
+def split_from_arch_types(upper_arch_value, lower_arch_value):
+    """Split File option from the Rx's Upper / Lower Arch Type fields, each 'Monoblock'
+    or 'Split-File': 'No', 'Upper', 'Lower' or 'Double'."""
+    up, lo = (bool(re.search(r"split", v or "", re.IGNORECASE))
+              for v in (upper_arch_value, lower_arch_value))
+    return "Double" if up and lo else "Upper" if up else "Lower" if lo else "No"
+
+
 _STATES = {
     "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California",
     "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "DC": "District of Columbia",
@@ -466,6 +474,11 @@ _STATES = {
 }
 
 
+# Abbreviated words in place names, either spelling matching the other: 'St Louis' = 'Saint Louis'
+_PLACE_WORDS = [("mt", "mount"), ("st", "saint")]
+_PLACE_WORD_RE = {w: rf"(?:{a}|{full})" for a, full in _PLACE_WORDS for w in (a, full)}
+
+
 def _center_in(center, text):
     """Whether a center's place name is in the text: 'Atlanta - Decatur' looks for
     Decatur, 'Columbia SC (Metro)' for Columbia plus SC or South Carolina."""
@@ -473,7 +486,8 @@ def _center_in(center, text):
     m = re.fullmatch(r"(.+?)\s+([A-Z]{2})", base)
     state = _STATES.get(m.group(2)) if m else None
     city = m.group(1) if state else base
-    city_re = r"\.?\s+".join(re.escape(w) for w in city.split())   # 'St Louis' = 'St. Louis'
+    words = (_PLACE_WORD_RE.get(w.lower().rstrip("."), re.escape(w)) for w in city.split())
+    city_re = r"\.?\s+".join(words)   # 'St Louis' = 'St. Louis' = 'Saint Louis'
     if not re.search(rf"\b{city_re}\b", text, re.IGNORECASE):
         return False
     return not state or re.search(rf"\b(?:{m.group(2)}|{state})\b", text) is not None
@@ -537,6 +551,8 @@ def parse_rx_pdf(path):
         arch = arch_from_treatment(pot, upper_at, lower_at)
         if arch:
             out['arch_type'] = arch
+        if upper_at or lower_at:
+            out['split_file'] = split_from_arch_types(upper_at, lower_at)
         center = guess_center(full1)
         if center:
             out['center'] = center

@@ -196,6 +196,13 @@ class ArchFromTreatmentTests(unittest.TestCase):
             "Upper Partial Denture and Lower Zirconia Arch Replacement", "Monoblock",
             "Monoblock"), "LAO4")
 
+    def test_split_from_arch_types(self):
+        for up, lo, split in [("Monoblock", "Monoblock", "No"), ("Split-File", "Monoblock", "Upper"),
+                              ("Monoblock", "Split-File", "Lower"), ("Split-File", "split file", "Double"),
+                              ("", "", "No")]:
+            with self.subTest(up=up, lo=lo):
+                self.assertEqual(core.split_from_arch_types(up, lo), split)
+
     def test_renamed_type_falls_back(self):
         saved = list(core.ARCH_TYPES)
         try:
@@ -207,7 +214,7 @@ class ArchFromTreatmentTests(unittest.TestCase):
 
 class GuessCenterTests(unittest.TestCase):
     CENTERS = ["Charlotte", "Charlotte - University City", "Columbia MD", "Columbia SC (Metro)",
-               "Columbus", "St Louis", "Woburn"]
+               "Columbus", "Mt Laurel", "St Louis", "Woburn"]
 
     def guess(self, text):
         with mock.patch.object(core, "CENTERS", self.CENTERS):
@@ -228,6 +235,12 @@ class GuessCenterTests(unittest.TestCase):
     def test_punctuation_and_misses(self):
         self.assertEqual(self.guess("Clinic, St. Louis, Missouri\nLab Rx\n"), "St Louis")
         self.assertIsNone(self.guess("Clinic, Boston, Massachusetts\nLab Rx\n"))
+
+    def test_mount_and_saint_spelled_out(self):
+        self.assertEqual(self.guess("Clinic, Mount Laurel, New Jersey\nLab Rx\n"), "Mt Laurel")
+        self.assertEqual(self.guess("Clinic, Mt. Laurel, NJ\nLab Rx\n"), "Mt Laurel")
+        self.assertEqual(self.guess("Clinic, Saint Louis, Missouri\nLab Rx\n"), "St Louis")
+        self.assertIsNone(self.guess("Clinic, Mountain Laurel\nLab Rx\n"))
 
 
 class FakePage:
@@ -284,6 +297,14 @@ class RxPdfTests(unittest.TestCase):
         out = self.parse(self.PAGE1, self.PAGE2)
         self.assertEqual(out["tooth_shade"], "BL3")
         self.assertEqual(out["ios_box"], "IOS")
+
+    def test_split_file_from_arch_type_fields(self):
+        page = FakePage(
+            ("Upper", 55, 300.0), ("Arch", 82, 300.0), ("Type:", 105, 300.0), ("Split-File", 145, 300.0),
+            ("Lower", 55, 312.0), ("Arch", 82, 312.0), ("Type:", 105, 312.0), ("Monoblock", 145, 312.0),
+        )
+        self.assertEqual(self.parse(self.PAGE1, page)["split_file"], "Upper")
+        self.assertNotIn("split_file", self.parse(self.PAGE1, self.PAGE2))   # fields not on the Rx
 
 
 class GuessRoleTests(unittest.TestCase):

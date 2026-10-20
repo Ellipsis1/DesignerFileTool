@@ -545,7 +545,8 @@ class App:
 
         self._set_defaults()
         self.vars["name_id"].set(data.get("name_id") or data.get("unique_id", ""))
-        for key in ("center", "tooth_shade", "stl_only", "ios_box", "due_date", "arch_type"):
+        for key in ("center", "tooth_shade", "stl_only", "ios_box", "due_date", "arch_type",
+                    "split_file"):
             if data.get(key):
                 self.vars[key].set(data[key])
         self.update_preview()
