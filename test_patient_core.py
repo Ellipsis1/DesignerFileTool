@@ -47,13 +47,15 @@ class NamingTests(unittest.TestCase):
         for typed in ("T. Li 1234-QWER", "T. Li (1234-QWER)", "t li 1234-qwer"):
             self.assertEqual(core.patient_from(typed, "").name3, "LI", typed)   # short name: no ID characters
         self.assertEqual(core.casenotes_name(case(name_id="T. Li (1234-QWER)")), "1234-QWER_T_LI_CaseNotes.txt")
-        self.assertEqual(core.folder_name(case(name_id="t est 1234-qwer")), "6.3.2026 T. EST 1234-QWER Chicago")
+        self.assertEqual(core.folder_name(case(name_id="t est 1234-qwer")), "6.11.2026 T. EST 1234-QWER Chicago")
         self.assertEqual(core.casenotes_name(case(name_id="t est 1234-qwer")), "1234-QWER_T_EST_CaseNotes.txt")
 
     def test_folder_name(self):
-        self.assertEqual(core.folder_name(case()), "6.3.2026 T. EST 1234-QWER Chicago")
+        self.assertEqual(core.folder_name(case()), "6.11.2026 T. EST 1234-QWER Chicago")
         self.assertTrue(core.folder_name(case(arch_type="MODEL ONLY")).endswith(" MODEL ONLY"))
+        self.assertEqual(core.folder_name(case(due_date="")), "6.3.2026 T. EST 1234-QWER Chicago")
         self.assertEqual(core.base_folder_name(case()), "T. EST 1234-QWER Chicago")
+        self.assertEqual(core.working_folder_name(case()), "T. EST 1234-QWER Chicago WORKING_FOLDER")
 
     def test_casenotes_uses_given_today(self):
         notes = core.build_casenotes(case(), today=date(2026, 9, 29))
@@ -600,7 +602,7 @@ class PlanAndCopyTests(unittest.TestCase):
         self.assertEqual(dest.read_bytes(), new_head.replace("Revisions: 2", "Revisions: 3").encode("cp1252"))
 
     def test_initial_folder_gets_notes_and_the_rx_moved_in(self):
-        base = self.root / "Desktop" / core.base_folder_name(case())
+        base = self.root / "Desktop" / core.working_folder_name(case())
         rx = self.make("Lab Rx.pdf", "rx")
         notes, moved = core.create_initial_folder(base, case(), rx)
         # the "!" keeps the notes above anything the designer saves in the folder
@@ -621,7 +623,7 @@ class PlanAndCopyTests(unittest.TestCase):
         self.assertEqual(core.create_initial_folder(base, case()), (notes, None))          # no Rx
 
     def test_working_folder_files(self):
-        base = self.root / "Desktop" / core.base_folder_name(case())
+        base = self.root / "Desktop" / core.working_folder_name(case())
         notes, rx = core.create_initial_folder(base, case(), self.make("Lab Rx.pdf", "rx"))
         for rel in ("upper.stl", "shots/front.png", "desktop.ini", "~lock.tmp",
                     "3D Viewer/1234-QWER_MX_T_EST.dcm", "1234-QWER STL/old.stl", "other.pdf"):

@@ -183,15 +183,25 @@ def stl_folder_name(uid):
 
 
 def folder_name(d):
-    """Patient folder name, e.g. '6.11.2026 T. TES 1234-QWER Chicago'."""
+    """Patient folder name, e.g. '6.11.2026 T. TES 1234-QWER Chicago'. Dated by the due date,
+    else the Rx date."""
     model_only = " MODEL ONLY" if d.get('arch_type') == "MODEL ONLY" else ""
-    return f"{fmt_date(d.get('rx_date'), '.')} {base_folder_name(d)}{model_only}"
+    date = d.get('due_date') or d.get('rx_date')
+    return f"{fmt_date(date, '.')} {base_folder_name(d)}{model_only}"
 
 
 def base_folder_name(d):
-    """Working folder the designer starts a case in, e.g. 'T. TES 1234-QWER Chicago'."""
+    """Patient part of the folder names, e.g. 'T. TES 1234-QWER Chicago'."""
     p = patient_from(d['name_id'], d['center'])
     return f"{p.init2} {p.name3} {p.uid} {p.center}"
+
+
+WORKING_SUFFIX = " WORKING_FOLDER"
+
+
+def working_folder_name(d):
+    """Working folder the designer starts a case in, e.g. 'T. TES 1234-QWER Chicago WORKING_FOLDER'."""
+    return base_folder_name(d) + WORKING_SUFFIX
 
 
 # In the working folder the CaseNotes name starts with this, so Explorer sorts it above

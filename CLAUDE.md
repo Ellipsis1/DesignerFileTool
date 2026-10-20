@@ -32,8 +32,8 @@ Two modules, strict split:
 
 Workflow the code implements, in two steps:
 
-1. **Start** — Rx PDF → pre-filled form → "Create Initial Folder + CaseNotes" (`create_initial_folder()`): a working folder `T. EST 1234-QWER Chicago` on the Desktop (`base_folder_name()`, no date) holding fresh CaseNotes and the Rx PDF, which is **moved** in. The designer saves models and screenshots there and edits the CaseNotes by hand.
-2. **Finish** — the working folder's CaseNotes file is dropped in → form filled by `parse_casenotes()` (Revisions included), and `working_folder_files()` lists the folder's Rx and case files → "Create/Update Folder + Notes + Files": the dated patient folder (`folder_name()`), case files and Rx copied (never moved) into subfolders with standardized names, plus a new CaseNotes holding the case information only.
+1. **Start** — Rx PDF → pre-filled form → "Create Initial Folder + CaseNotes" (`create_initial_folder()`): a working folder `T. EST 1234-QWER Chicago WORKING_FOLDER` on the Desktop (`working_folder_name()`: `base_folder_name()` plus `WORKING_SUFFIX`, no date) holding fresh CaseNotes and the Rx PDF, which is **moved** in. The designer saves models and screenshots there and edits the CaseNotes by hand.
+2. **Finish** — the working folder's CaseNotes file is dropped in → form filled by `parse_casenotes()` (Revisions included), and `working_folder_files()` lists the folder's Rx and case files → "Create/Update Folder + Notes + Files": the dated patient folder (`folder_name()`: dated by the Due by Date, else the Rx Date), case files and Rx copied (never moved) into subfolders with standardized names, plus a new CaseNotes holding the case information only.
 
 Step 2 is repeated per round: first send to the doctor, each revision (new files in a `Revision N` subfolder of the working folder, or marked `Rev N` in their names), then the final submission once the STLs and zip are added.
 

@@ -390,8 +390,8 @@ class App:
             if key == "designer":   # only warned about, at Create (see _designer_ok)
                 continue
             out.append(f"{text}: '{value}' is not in the list")
-        if not d.get("rx_date"):
-            out.append("Rx Date (used in the folder name)")
+        if not d.get("due_date") and not d.get("rx_date"):
+            out.append("Due by Date or Rx Date (used in the folder name)")
         for key in DATE_FIELDS:
             if d.get(key) and core.parse_date(d[key]) is None:
                 out.append(f"{key.replace('_', ' ').title()} is not a valid date (mm/dd/yyyy)")
@@ -672,7 +672,7 @@ class App:
             return
         if not self._designer_ok(d):
             return
-        base = core.DESKTOP / core.safe_name(core.base_folder_name(d))
+        base = core.DESKTOP / core.safe_name(core.working_folder_name(d))
         if (base / core.casenotes_name(d, working=True)).exists() and not messagebox.askyesno(
                 "CaseNotes already exist",
                 f"{base.name}\n\nalready has CaseNotes.\n"
